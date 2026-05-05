@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'api_service.dart';
+import 'log_workout_screen.dart';
+import 'workout_history_screen.dart';
+import 'exercise_stats_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,47 +14,49 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AI Fitness',
-      home: const HomePage(),
+      home: const MainScreen(),
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _HomePageState extends State<HomePage> {
-  String status = 'Checking connection...';
+class _MainScreenState extends State<MainScreen> {
+  int currentIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    checkBackend();
-  }
-
-  void checkBackend() async {
-    final connected = await testConnection();
-    setState(() {
-      status = connected
-          ? '✅ Backend connected!'
-          : '❌ Could not reach backend';
-    });
-  }
+  final screens = const [
+    LogWorkoutScreen(),
+    WorkoutHistoryScreen(),
+    ExerciseStatsScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('AI Fitness')),
-      body: Center(
-        child: Text(
-          status,
-          style: const TextStyle(fontSize: 24),
-        ),
+      body: screens[currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: (index) => setState(() => currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add_circle),
+            label: 'Log',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'History',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Stats',
+          ),
+        ],
       ),
     );
   }
 }
-// 

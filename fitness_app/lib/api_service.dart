@@ -30,3 +30,17 @@ Future<bool> createWorkout(Map<String, dynamic> workout) async {
   );
   return response.statusCode == 200;
 }
+
+Future<Map<String, dynamic>?> getExerciseStats(int userId, String exercise) async {
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/users/$userId/exercises/$exercise/stats'),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
