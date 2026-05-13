@@ -1,8 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import List
+from jose import jwt, JWTError
+import os
 
 from .database import SessionLocal, engine, Base
 from .models import User, Workout
@@ -16,6 +19,29 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+security = HTTPBearer()
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            options={"verify_aud": False}
+        )
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 def get_db():
     db = SessionLocal()
@@ -24,12 +50,10 @@ def get_db():
     finally:
         db.close()
 
-
 def calculate_volume(workout: Workout):
     if workout.sets and workout.reps and workout.weight:
         return workout.sets * workout.reps * workout.weight
     return None
-
 
 def workout_to_response(workout: Workout):
     return {
@@ -43,16 +67,13 @@ def workout_to_response(workout: Workout):
         "volume": calculate_volume(workout),
     }
 
-
 @app.get("/")
 def root():
     return {"status": "ok", "message": "AI Fitness backend is running"}
 
-
 @app.get("/test-db")
 def test_db(db: Session = Depends(get_db)):
     return {"message": "Database connected!"}
-
 
 @app.post("/users", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -62,11 +83,14 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
-
 @app.post("/workouts", response_model=WorkoutResponse)
-def create_workout(workout: WorkoutCreate, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == workout.user_id).first()
-    if not user:
+def create_workout(
+    workout: WorkoutCreate,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
+    db_user = db.query(User).filter(User.id == workout.user_id).first()
+    if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     new_workout = Workout(**workout.model_dump())
     db.add(new_workout)
@@ -74,27 +98,39 @@ def create_workout(workout: WorkoutCreate, db: Session = Depends(get_db)):
     db.refresh(new_workout)
     return workout_to_response(new_workout)
 
-
 @app.get("/workouts", response_model=List[WorkoutResponse])
-def get_all_workouts(db: Session = Depends(get_db)):
+def get_all_workouts(
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     return [workout_to_response(w) for w in db.query(Workout).all()]
 
-
 @app.get("/workouts/user/{user_id}", response_model=List[WorkoutResponse])
-def get_user_workouts(user_id: int, db: Session = Depends(get_db)):
+def get_user_workouts(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     return [workout_to_response(w) for w in db.query(Workout).filter(Workout.user_id == user_id).all()]
 
-
 @app.get("/workouts/{workout_id}", response_model=WorkoutResponse)
-def get_workout(workout_id: int, db: Session = Depends(get_db)):
+def get_workout(
+    workout_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     workout = db.query(Workout).filter(Workout.id == workout_id).first()
     if not workout:
         raise HTTPException(status_code=404, detail="Workout not found")
     return workout_to_response(workout)
 
-
 @app.put("/workouts/{workout_id}", response_model=WorkoutResponse)
-def update_workout(workout_id: int, workout: WorkoutUpdate, db: Session = Depends(get_db)):
+def update_workout(
+    workout_id: int,
+    workout: WorkoutUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     db_workout = db.query(Workout).filter(Workout.id == workout_id).first()
     if not db_workout:
         raise HTTPException(status_code=404, detail="Workout not found")
@@ -104,9 +140,13 @@ def update_workout(workout_id: int, workout: WorkoutUpdate, db: Session = Depend
     db.refresh(db_workout)
     return workout_to_response(db_workout)
 
-
 @app.get("/users/{user_id}/exercises/{exercise}/last", response_model=WorkoutResponse)
-def get_last_workout_for_exercise(user_id: int, exercise: str, db: Session = Depends(get_db)):
+def get_last_workout_for_exercise(
+    user_id: int,
+    exercise: str,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     workout = (
         db.query(Workout)
         .filter(Workout.user_id == user_id, Workout.exercise == exercise)
@@ -117,9 +157,13 @@ def get_last_workout_for_exercise(user_id: int, exercise: str, db: Session = Dep
         raise HTTPException(status_code=404, detail="No workout found for that exercise")
     return workout_to_response(workout)
 
-
 @app.get("/users/{user_id}/exercises/{exercise}/stats", response_model=ExerciseStats)
-def get_exercise_stats(user_id: int, exercise: str, db: Session = Depends(get_db)):
+def get_exercise_stats(
+    user_id: int,
+    exercise: str,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     workouts = (
         db.query(Workout)
         .filter(Workout.user_id == user_id, Workout.exercise == exercise)
@@ -140,9 +184,13 @@ def get_exercise_stats(user_id: int, exercise: str, db: Session = Depends(get_db
         "total_sessions": len(workouts),
     }
 
-
 @app.get("/users/{user_id}/summary/weekly", response_model=List[WeeklySummary])
-def get_weekly_summary(user_id: int, weeks: int = 4, db: Session = Depends(get_db)):
+def get_weekly_summary(
+    user_id: int,
+    weeks: int = 4,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token)
+):
     results = []
     today = datetime.utcnow().date()
     for i in range(weeks):
