@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-from jose import jwt, JWTError, jwk
+from typing import List
+from functools import lru_cache
+from jwt import PyJWKClient
+from jwt import decode as jwt_decode
 import os
-import httpx
 import google.generativeai as genai
 import base64
 import json
@@ -32,39 +33,28 @@ app.add_middleware(
 )
 
 security = HTTPBearer()
-SUPABASE_JWKS_URL = "https://jfopizywtgaqhkbkjlyz.supabase.co/auth/v1/.well-known/jwks.json"
+SUPABASE_URL = "https://jfopizywtgaqhkbkjlyz.supabase.co"
+JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+ISSUER = f"{SUPABASE_URL}/auth/v1"
 
-_jwks_cache: Optional[Dict[str, Any]] = None
+@lru_cache(maxsize=1)
+def get_jwks_client():
+    return PyJWKClient(JWKS_URL)
 
-async def get_jwks() -> Dict[str, Any]:
-    global _jwks_cache
-    if _jwks_cache is None:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(SUPABASE_JWKS_URL)
-            _jwks_cache = response.json()
-    return _jwks_cache
-
-async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     try:
-        jwks_data = await get_jwks()
-        header = jwt.get_unverified_header(token)
-        kid = header.get("kid")
-        signing_key = None
-        for key in jwks_data.get("keys", []):
-            if key.get("kid") == kid:
-                signing_key = jwk.construct(key)
-                break
-        if signing_key is None:
-            raise HTTPException(status_code=401, detail="Signing key not found")
-        payload = jwt.decode(
+        jwks_client = get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token).key
+        payload = jwt_decode(
             token,
             signing_key,
-            algorithms=["ES256"],
-            options={"verify_aud": False}
+            algorithms=["ES256", "RS256"],
+            issuer=ISSUER,
+            audience="authenticated",
         )
         return payload
-    except JWTError as e:
+    except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 def get_db():
@@ -243,10 +233,10 @@ async def scan_calories(
 ):
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
     model = genai.GenerativeModel("gemini-2.5-flash")
-    
+
     image_data = await file.read()
     base64_image = base64.b64encode(image_data).decode('utf-8')
-    
+
     response = model.generate_content([
         {
             "mime_type": "image/jpeg",
@@ -263,7 +253,7 @@ async def scan_calories(
         }
         Be as accurate as possible. Return only JSON, no other text."""
     ])
-    
+
     result = response.text
     clean = result.replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
