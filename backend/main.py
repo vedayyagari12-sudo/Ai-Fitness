@@ -257,3 +257,4 @@ async def scan_calories(
     result = response.text
     clean = result.replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
+# 
