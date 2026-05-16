@@ -10,7 +10,7 @@ from jwt import decode as jwt_decode
 import os
 import google.generativeai as genai
 import base64
-import json
+import json`nimport httpx`nimport httpx
 import httpx
 
 from .database import SessionLocal, engine, Base
