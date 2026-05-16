@@ -7,6 +7,11 @@ from typing import List
 from jose import jwt, JWTError
 import os
 
+import google.generativeai as genai
+import base64
+import json
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+
 from .database import SessionLocal, engine, Base
 from .models import User, Workout
 from .schemas import (
@@ -211,3 +216,35 @@ def get_weekly_summary(
             "total_sessions": len(workouts),
         })
     return results
+
+@app.post("/calories/scan")
+async def scan_calories(
+    file: UploadFile = File(...),
+    user=Depends(verify_token)
+):
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    
+    image_data = await file.read()
+    base64_image = base64.b64encode(image_data).decode('utf-8')
+    
+    response = model.generate_content([
+        {
+            "mime_type": "image/jpeg",
+            "data": base64_image
+        },
+        """Analyze this food image and return ONLY a JSON object like this:
+        {
+            "food_name": "name of the food",
+            "calories": 000,
+            "protein_g": 00,
+            "carbs_g": 00,
+            "fat_g": 00,
+            "serving_size": "description of portion"
+        }
+        Be as accurate as possible. Return only JSON, no other text."""
+    ])
+    
+    result = response.text
+    clean = result.replace("```json", "").replace("```", "").strip()
+    return json.loads(clean)

@@ -48,3 +48,5 @@ typing-inspection==0.4.2
 uvicorn==0.42.0
     # via ai-fitness (pyproject.toml)
 python-jose[cryptography]
+
+google-generativeai
