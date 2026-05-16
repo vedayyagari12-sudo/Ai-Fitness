@@ -11,6 +11,7 @@ import os
 import google.generativeai as genai
 import base64
 import json
+import httpx
 
 from .database import SessionLocal, engine, Base
 from .models import User, Workout
