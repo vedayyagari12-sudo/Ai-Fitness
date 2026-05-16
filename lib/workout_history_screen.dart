@@ -20,10 +20,12 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   }
 
   void loadWorkouts() async {
-    final data = await getWorkouts(1);
-    setState(() {
-      workouts = data;
-      isLoading = false;
+    if (!mounted) return;
+  final data = await getWorkouts(1);
+  if (!mounted) return;
+  setState(() {
+    workouts = data;
+    isLoading = false;
     });
   }
 

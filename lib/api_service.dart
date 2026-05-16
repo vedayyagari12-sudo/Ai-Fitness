@@ -26,10 +26,14 @@ Future<bool> testConnection() async {
 }
 
 Future<List<dynamic>> getWorkouts(int userId) async {
+  final session = Supabase.instance.client.auth.currentSession;
+  print('Token: ${session?.accessToken}');
   final response = await http.get(
     Uri.parse('$baseUrl/workouts/user/$userId'),
     headers: getHeaders(),
   );
+  print('Status: ${response.statusCode}');
+  print('Body: ${response.body}');
   if (response.statusCode == 200) {
     return jsonDecode(response.body);
   }
