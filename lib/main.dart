@@ -4,6 +4,7 @@ import 'log_workout_screen.dart';
 import 'workout_history_screen.dart';
 import 'exercise_stats_screen.dart';
 import 'login_screen.dart';
+import 'calorie_scan_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +64,7 @@ class _MainScreenState extends State<MainScreen> {
     LogWorkoutScreen(),
     WorkoutHistoryScreen(),
     ExerciseStatsScreen(),
+    CalorieScanScreen(),
   ];
 
   @override
@@ -84,6 +86,10 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart),
             label: 'Stats',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.camera_alt),
+            label: 'Calories',
           ),
         ],
       ),

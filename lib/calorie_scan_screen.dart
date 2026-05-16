@@ -29,7 +29,6 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
 
     setState(() {
       isLoading = true;
-      message = 'Analyzing your food...';
       result = null;
     });
 
@@ -157,4 +156,3 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
     );
   }
 }
-// 

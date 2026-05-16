@@ -257,4 +257,30 @@ async def scan_calories(
     result = response.text
     clean = result.replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
-# 
+@app.post("/calories/log")
+async def log_calories(
+    log: dict,
+    user=Depends(verify_token)
+):
+    db_user_id = user.get("sub")
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"https://jfopizywtgaqhkbkjlyz.supabase.co/rest/v1/calorie_logs",
+            headers={
+                "apikey": os.getenv("SUPABASE_ANON_KEY"),
+                "Authorization": f"Bearer {os.getenv('SUPABASE_ANON_KEY')}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            },
+            json={
+                "user_id": db_user_id,
+                "food_name": log.get("food_name"),
+                "calories": log.get("calories"),
+                "protein_g": log.get("protein_g"),
+                "carbs_g": log.get("carbs_g"),
+                "fat_g": log.get("fat_g"),
+                "serving_size": log.get("serving_size"),
+            }
+        )
+    return {"saved": response.status_code == 201}
