@@ -19,7 +19,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
   bool isLoading = false;
   String message = '';
 
-  Future<void> scanFood(ImageSource source) async {
+ Future<void> scanFood(ImageSource source) async {
     final XFile? image = await picker.pickImage(
       source: source,
       imageQuality: 70,
@@ -29,6 +29,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
 
     setState(() {
       isLoading = true;
+      message = 'Analyzing your food...';
       result = null;
     });
 
@@ -52,10 +53,22 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
       final responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
+        final scanResult = jsonDecode(responseBody);
         setState(() {
-          result = jsonDecode(responseBody);
+          result = scanResult;
           message = '';
         });
+
+        // Save to database
+        await http.post(
+          Uri.parse('$baseUrl/calories/log'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(scanResult),
+        );
+
       } else {
         setState(() {
           message = '❌ Could not analyze image. Try again.';
