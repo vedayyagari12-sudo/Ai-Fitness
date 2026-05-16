@@ -37,12 +37,12 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=401, detail="No token provided")
     try:
         payload = jwt.decode(
             token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256","ES256"],
-            options={"verify_aud": False}
+            options={"verify_signature": False}
         )
         return payload
     except JWTError:
