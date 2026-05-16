@@ -1,16 +1,15 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import List
-from jose import jwt, JWTError
+from typing import List, Dict, Any, Optional
+from jose import jwt, JWTError, jwk
 import os
-
+import httpx
 import google.generativeai as genai
 import base64
 import json
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 
 from .database import SessionLocal, engine, Base
 from .models import User, Workout
@@ -33,20 +32,40 @@ app.add_middleware(
 )
 
 security = HTTPBearer()
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+SUPABASE_JWKS_URL = "https://jfopizywtgaqhkbkjlyz.supabase.co/auth/v1/.well-known/jwks.json"
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+_jwks_cache: Optional[Dict[str, Any]] = None
+
+async def get_jwks() -> Dict[str, Any]:
+    global _jwks_cache
+    if _jwks_cache is None:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(SUPABASE_JWKS_URL)
+            _jwks_cache = response.json()
+    return _jwks_cache
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
-    if not token:
-        raise HTTPException(status_code=401, detail="No token provided")
     try:
+        jwks_data = await get_jwks()
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
+        signing_key = None
+        for key in jwks_data.get("keys", []):
+            if key.get("kid") == kid:
+                signing_key = jwk.construct(key)
+                break
+        if signing_key is None:
+            raise HTTPException(status_code=401, detail="Signing key not found")
         payload = jwt.decode(
             token,
-            options={"verify_signature": False}
+            signing_key,
+            algorithms=["ES256"],
+            options={"verify_aud": False}
         )
         return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 def get_db():
     db = SessionLocal()
@@ -89,7 +108,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @app.post("/workouts", response_model=WorkoutResponse)
-def create_workout(
+async def create_workout(
     workout: WorkoutCreate,
     db: Session = Depends(get_db),
     user=Depends(verify_token)
@@ -104,14 +123,14 @@ def create_workout(
     return workout_to_response(new_workout)
 
 @app.get("/workouts", response_model=List[WorkoutResponse])
-def get_all_workouts(
+async def get_all_workouts(
     db: Session = Depends(get_db),
     user=Depends(verify_token)
 ):
     return [workout_to_response(w) for w in db.query(Workout).all()]
 
 @app.get("/workouts/user/{user_id}", response_model=List[WorkoutResponse])
-def get_user_workouts(
+async def get_user_workouts(
     user_id: int,
     db: Session = Depends(get_db),
     user=Depends(verify_token)
@@ -119,7 +138,7 @@ def get_user_workouts(
     return [workout_to_response(w) for w in db.query(Workout).filter(Workout.user_id == user_id).all()]
 
 @app.get("/workouts/{workout_id}", response_model=WorkoutResponse)
-def get_workout(
+async def get_workout(
     workout_id: int,
     db: Session = Depends(get_db),
     user=Depends(verify_token)
@@ -130,7 +149,7 @@ def get_workout(
     return workout_to_response(workout)
 
 @app.put("/workouts/{workout_id}", response_model=WorkoutResponse)
-def update_workout(
+async def update_workout(
     workout_id: int,
     workout: WorkoutUpdate,
     db: Session = Depends(get_db),
@@ -146,7 +165,7 @@ def update_workout(
     return workout_to_response(db_workout)
 
 @app.get("/users/{user_id}/exercises/{exercise}/last", response_model=WorkoutResponse)
-def get_last_workout_for_exercise(
+async def get_last_workout_for_exercise(
     user_id: int,
     exercise: str,
     db: Session = Depends(get_db),
@@ -163,7 +182,7 @@ def get_last_workout_for_exercise(
     return workout_to_response(workout)
 
 @app.get("/users/{user_id}/exercises/{exercise}/stats", response_model=ExerciseStats)
-def get_exercise_stats(
+async def get_exercise_stats(
     user_id: int,
     exercise: str,
     db: Session = Depends(get_db),
@@ -190,7 +209,7 @@ def get_exercise_stats(
     }
 
 @app.get("/users/{user_id}/summary/weekly", response_model=List[WeeklySummary])
-def get_weekly_summary(
+async def get_weekly_summary(
     user_id: int,
     weeks: int = 4,
     db: Session = Depends(get_db),
