@@ -285,3 +285,88 @@ async def log_calories(
             }
         )
     return {"saved": response.status_code == 201}
+
+
+@app.post("/physique/scan")
+async def scan_physique(
+    file: UploadFile = File(...),
+    user=Depends(verify_token)
+):
+    user_id = user.get("sub")
+    
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    
+    image_data = await file.read()
+    base64_image = base64.b64encode(image_data).decode('utf-8')
+    
+    prompt = """You are an expert fitness coach and physique analyst. Analyze this physique photo and return ONLY a JSON object with no other text:
+    {
+        "overall_score": <0-100, where 100 is elite hybrid athlete/bodybuilder>,
+        "body_fat_estimate": "<range like 10-12%>",
+        "symmetry_score": <0-10>,
+        "body_type": "<ectomorph/mesomorph/endomorph>",
+        "muscle_groups": {
+            "chest": {"score": <0-10>, "feedback": "<specific feedback>"},
+            "back": {"score": <0-10>, "feedback": "<specific feedback>"},
+            "shoulders": {"score": <0-10>, "feedback": "<specific feedback>"},
+            "arms": {"score": <0-10>, "feedback": "<specific feedback>"},
+            "legs": {"score": <0-10>, "feedback": "<specific feedback>"},
+            "core": {"score": <0-10>, "feedback": "<specific feedback>"}
+        },
+        "posture": {
+            "overall": "<good/fair/poor>",
+            "head_position": "<forward/neutral/back>",
+            "shoulder_alignment": "<rounded/neutral/back>",
+            "hip_alignment": "<tilted/neutral>",
+            "feedback": "<specific posture feedback>"
+        },
+        "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+        "weaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"],
+        "recommendations": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>"],
+        "goal_suggestions": ["<suggestion based on physique 1>", "<suggestion 2>"]
+    }
+    Be objective, specific, and constructive. Base the overall_score on muscle development, symmetry, body composition, and posture combined. Only return JSON."""
+    
+    response = model.generate_content([
+        {
+            "mime_type": "image/jpeg",
+            "data": base64_image
+        },
+        prompt
+    ])
+    
+    result = response.text
+    clean = result.replace("```json", "").replace("```", "").strip()
+    scan_data = json.loads(clean)
+    
+    # Save to Supabase
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            "https://jfopizywtgaqhkbkjlyz.supabase.co/rest/v1/physique_scans",
+            headers={
+                "apikey": os.getenv("SUPABASE_ANON_KEY"),
+                "Authorization": f"Bearer {os.getenv('SUPABASE_ANON_KEY')}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            },
+            json={
+                "user_id": user_id,
+                "overall_score": scan_data.get("overall_score"),
+                "body_fat_estimate": scan_data.get("body_fat_estimate"),
+                "symmetry_score": scan_data.get("symmetry_score"),
+                "body_type": scan_data.get("body_type"),
+                "chest_score": scan_data.get("muscle_groups", {}).get("chest", {}).get("score"),
+                "back_score": scan_data.get("muscle_groups", {}).get("back", {}).get("score"),
+                "shoulders_score": scan_data.get("muscle_groups", {}).get("shoulders", {}).get("score"),
+                "arms_score": scan_data.get("muscle_groups", {}).get("arms", {}).get("score"),
+                "legs_score": scan_data.get("muscle_groups", {}).get("legs", {}).get("score"),
+                "core_score": scan_data.get("muscle_groups", {}).get("core", {}).get("score"),
+                "posture_check": json.dumps(scan_data.get("posture")),
+                "strengths": scan_data.get("strengths"),
+                "weaknesses": scan_data.get("weaknesses"),
+                "recommendations": scan_data.get("recommendations"),
+            }
+        )
+    
+    return scan_data
