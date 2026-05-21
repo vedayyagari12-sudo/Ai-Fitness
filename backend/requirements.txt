@@ -7,3 +7,4 @@ google-generativeai
 python-multipart
 pydantic
 PyJWT[crypto]==2.10.1
+httpx
