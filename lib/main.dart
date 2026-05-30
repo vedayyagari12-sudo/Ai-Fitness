@@ -6,6 +6,7 @@ import 'exercise_stats_screen.dart';
 import 'login_screen.dart';
 import 'calorie_scan_screen.dart';
 import 'physique_scan_screen.dart';
+import 'workout_generator_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +68,7 @@ class _MainScreenState extends State<MainScreen> {
     ExerciseStatsScreen(),
     CalorieScanScreen(),
     PhysiqueScanScreen(),
+    WorkoutGeneratorScreen(),
   ];
 
  @override
