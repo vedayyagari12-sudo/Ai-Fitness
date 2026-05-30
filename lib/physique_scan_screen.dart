@@ -18,14 +18,31 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
   Map<String, dynamic>? result;
   bool isLoading = false;
   String message = '';
+  List<XFile> selectedImages = [];
 
-  Future<void> scanPhysique(ImageSource source) async {
+  Future<void> addPhoto(ImageSource source) async {
     final XFile? image = await picker.pickImage(
       source: source,
       imageQuality: 80,
       maxWidth: 1024,
     );
     if (image == null) return;
+    setState(() {
+      selectedImages.add(image);
+    });
+  }
+
+  void removePhoto(int index) {
+    setState(() {
+      selectedImages.removeAt(index);
+    });
+  }
+
+  Future<void> scanPhysique() async {
+    if (selectedImages.isEmpty) {
+      setState(() => message = '❌ Please add at least one photo');
+      return;
+    }
 
     setState(() {
       isLoading = true;
@@ -36,18 +53,21 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
     try {
       final session = Supabase.instance.client.auth.currentSession;
       final token = session?.accessToken ?? '';
-      final imageBytes = await image.readAsBytes();
 
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$physiqueBaseUrl/physique/scan'),
       );
       request.headers['Authorization'] = 'Bearer $token';
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        imageBytes,
-        filename: 'physique.jpg',
-      ));
+
+      for (final image in selectedImages) {
+        final imageBytes = await image.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'files',
+          imageBytes,
+          filename: 'physique.jpg',
+        ));
+      }
 
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
@@ -116,14 +136,18 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text(
+              'Add photos from different angles for the most accurate analysis',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: isLoading
-                        ? null
-                        : () => scanPhysique(ImageSource.camera),
+                    onPressed: isLoading ? null : () => addPhoto(ImageSource.camera),
                     icon: const Icon(Icons.camera_alt),
                     label: const Text('Camera'),
                   ),
@@ -131,24 +155,40 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: isLoading
-                        ? null
-                        : () => scanPhysique(ImageSource.gallery),
+                    onPressed: isLoading ? null : () => addPhoto(ImageSource.gallery),
                     icon: const Icon(Icons.photo_library),
                     label: const Text('Gallery'),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            if (isLoading)
-              const Column(
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('Analyzing your physique...'),
-                ],
+            const SizedBox(height: 12),
+
+            // Show selected photos
+            if (selectedImages.isNotEmpty) ...[
+              Text('${selectedImages.length} photo(s) selected',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: selectedImages.asMap().entries.map((entry) {
+                  return Chip(
+                    label: Text('Photo ${entry.key + 1}'),
+                    onDeleted: () => removePhoto(entry.key),
+                  );
+                }).toList(),
               ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: isLoading ? null : scanPhysique,
+                  child: Text(isLoading ? 'Analyzing...' : '🔍 Analyze Physique'),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
             if (message.isNotEmpty) Text(message),
             if (result != null) ...[
               // Overall Score
@@ -166,48 +206,59 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                       ),
                       const Text('Overall Physique Score'),
                       const SizedBox(height: 12),
-                      infoRow('Body Fat', result!['body_fat_estimate'] ?? 'N/A'),
-                      infoRow('Body Type', result!['body_type'] ?? 'N/A'),
-                      infoRow('Symmetry', '${result!['symmetry_score']}/10'),
+                      if (result!['body_fat_estimate'] != null)
+                        infoRow('Body Fat', result!['body_fat_estimate']),
+                      if (result!['body_type'] != null)
+                        infoRow('Body Type', result!['body_type']),
+                      if (result!['symmetry_score'] != null)
+                        infoRow('Symmetry', '${result!['symmetry_score']}/10'),
+                      if (result!['visible_angles'] != null)
+                        infoRow('Angles Analyzed',
+                            (result!['visible_angles'] as List).join(', ')),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 12),
 
-              // Muscle Groups
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Muscle Groups',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      ...['chest', 'back', 'shoulders', 'arms', 'legs', 'core']
-                          .map((muscle) {
-                        final data = result!['muscle_groups']?[muscle];
-                        if (data == null) return const SizedBox();
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            scoreBar(muscle.toUpperCase(),
-                                data['score'] ?? 0, 10),
-                            Text(
-                              data['feedback'] ?? '',
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        );
-                      }),
-                    ],
+              // Muscle Groups - only show visible ones
+              if (result!['muscle_groups'] != null)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Muscle Groups',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        const Text('Powered by AI',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(height: 12),
+                        ...['chest', 'back', 'shoulders', 'arms', 'legs', 'core']
+                            .where((muscle) =>
+                                result!['muscle_groups'][muscle] != null)
+                            .map((muscle) {
+                          final data = result!['muscle_groups'][muscle];
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              scoreBar(muscle.toUpperCase(),
+                                  data['score'] ?? 0, 10),
+                              Text(
+                                data['feedback'] ?? '',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
 
               // Posture
@@ -222,16 +273,19 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                             style: TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
-                        infoRow('Overall',
-                            result!['posture']['overall'] ?? 'N/A'),
-                        infoRow('Head Position',
-                            result!['posture']['head_position'] ?? 'N/A'),
-                        infoRow('Shoulders',
-                            result!['posture']['shoulder_alignment'] ?? 'N/A'),
-                        infoRow('Hips',
-                            result!['posture']['hip_alignment'] ?? 'N/A'),
+                        if (result!['posture']['overall'] != null)
+                          infoRow('Overall', result!['posture']['overall']),
+                        if (result!['posture']['head_position'] != null)
+                          infoRow('Head Position',
+                              result!['posture']['head_position']),
+                        if (result!['posture']['shoulder_alignment'] != null)
+                          infoRow('Shoulders',
+                              result!['posture']['shoulder_alignment']),
+                        if (result!['posture']['hip_alignment'] != null)
+                          infoRow('Hips', result!['posture']['hip_alignment']),
                         const SizedBox(height: 8),
-                        Text(result!['posture']['feedback'] ?? ''),
+                        if (result!['posture']['feedback'] != null)
+                          Text(result!['posture']['feedback']),
                       ],
                     ),
                   ),
@@ -239,72 +293,89 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
               const SizedBox(height: 12),
 
               // Strengths
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Strengths ✅',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      ...(result!['strengths'] as List? ?? [])
-                          .map((s) => Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Text('• $s'),
-                              )),
-                    ],
+              if ((result!['strengths'] as List? ?? []).isNotEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Strengths ✅',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        ...(result!['strengths'] as List).map((s) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text('• $s'),
+                            )),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
 
               // Weaknesses
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Needs Work ⚠️',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      ...(result!['weaknesses'] as List? ?? [])
-                          .map((s) => Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Text('• $s'),
-                              )),
-                    ],
+              if ((result!['weaknesses'] as List? ?? []).isNotEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Needs Work ⚠️',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        ...(result!['weaknesses'] as List).map((s) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text('• $s'),
+                            )),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
 
               // Recommendations
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Recommendations 💪',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      ...(result!['recommendations'] as List? ?? [])
-                          .map((s) => Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Text('• $s'),
-                              )),
-                    ],
+              if ((result!['recommendations'] as List? ?? []).isNotEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Recommendations 💪',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        ...(result!['recommendations'] as List)
+                            .map((s) => Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  child: Text('• $s'),
+                                )),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+
+              // Note about what couldn't be assessed
+              if (result!['note'] != null)
+                Card(
+                  color: Colors.amber.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('📸 Note',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(result!['note'] ?? ''),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ],
         ),
@@ -312,3 +383,4 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
     );
   }
 }
+// 
