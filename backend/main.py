@@ -370,3 +370,48 @@ async def scan_physique(
         )
     
     return scan_data
+
+    @app.post("/workouts/generate")
+async def generate_workout(
+    request: dict,
+    user=Depends(verify_token)
+):
+    user_id = user.get("sub")
+    
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    
+    goal = request.get("goal", "general fitness")
+    equipment = request.get("equipment", "full gym")
+    duration = request.get("duration", 60)
+    focus = request.get("focus", "full body")
+    
+    prompt = f"""You are an expert personal trainer. Create a workout plan and return ONLY a JSON object:
+    {{
+        "workout_name": "<creative workout name>",
+        "duration_minutes": {duration},
+        "goal": "{goal}",
+        "focus": "{focus}",
+        "warmup": [
+            {{"exercise": "<name>", "duration": "<time>", "instructions": "<how to>"}}
+        ],
+        "main_workout": [
+            {{"exercise": "<name>", "sets": <number>, "reps": "<number or range>", "rest_seconds": <number>, "instructions": "<how to>", "muscle_group": "<primary muscle>"}}
+        ],
+        "cooldown": [
+            {{"exercise": "<name>", "duration": "<time>", "instructions": "<how to>"}}
+        ],
+        "tips": ["<tip 1>", "<tip 2>", "<tip 3>"]
+    }}
+    
+    User goal: {goal}
+    Equipment available: {equipment}
+    Workout duration: {duration} minutes
+    Focus area: {focus}
+    
+    Make it specific, progressive, and effective. Only return JSON."""
+    
+    response = model.generate_content(prompt)
+    result = response.text
+    clean = result.replace("```json", "").replace("```", "").strip()
+    return json.loads(clean)
