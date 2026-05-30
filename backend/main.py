@@ -371,7 +371,7 @@ async def scan_physique(
     
     return scan_data
 
-    @app.post("/workouts/generate")
+@app.post("/workouts/generate")
 async def generate_workout(
     request: dict,
     user=Depends(verify_token)
