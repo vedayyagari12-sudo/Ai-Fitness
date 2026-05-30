@@ -289,7 +289,7 @@ async def log_calories(
 
 @app.post("/physique/scan")
 async def scan_physique(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     user=Depends(verify_token)
 ):
     user_id = user.get("sub")
@@ -297,50 +297,60 @@ async def scan_physique(
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
     model = genai.GenerativeModel("gemini-2.5-flash")
     
-    image_data = await file.read()
-    base64_image = base64.b64encode(image_data).decode('utf-8')
-    
-    prompt = """You are an expert fitness coach and physique analyst. Analyze this physique photo and return ONLY a JSON object with no other text:
-    {
-        "overall_score": <0-100, where 100 is elite hybrid athlete/bodybuilder>,
-        "body_fat_estimate": "<range like 10-12%>",
-        "symmetry_score": <0-10>,
-        "body_type": "<ectomorph/mesomorph/endomorph>",
-        "muscle_groups": {
-            "chest": {"score": <0-10>, "feedback": "<specific feedback>"},
-            "back": {"score": <0-10>, "feedback": "<specific feedback>"},
-            "shoulders": {"score": <0-10>, "feedback": "<specific feedback>"},
-            "arms": {"score": <0-10>, "feedback": "<specific feedback>"},
-            "legs": {"score": <0-10>, "feedback": "<specific feedback>"},
-            "core": {"score": <0-10>, "feedback": "<specific feedback>"}
-        },
-        "posture": {
-            "overall": "<good/fair/poor>",
-            "head_position": "<forward/neutral/back>",
-            "shoulder_alignment": "<rounded/neutral/back>",
-            "hip_alignment": "<tilted/neutral>",
-            "feedback": "<specific posture feedback>"
-        },
-        "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-        "weaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"],
-        "recommendations": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>"],
-        "goal_suggestions": ["<suggestion based on physique 1>", "<suggestion 2>"]
-    }
-    Be objective, specific, and constructive. Base the overall_score on muscle development, symmetry, body composition, and posture combined. Only return JSON."""
-    
-    response = model.generate_content([
-        {
+    image_parts = []
+    for file in files:
+        image_data = await file.read()
+        base64_image = base64.b64encode(image_data).decode('utf-8')
+        image_parts.append({
             "mime_type": "image/jpeg",
             "data": base64_image
-        },
-        prompt
-    ])
+        })
+    
+    prompt = """You are an expert fitness coach and physique analyst. Analyze ONLY what is clearly visible in these physique photos.
+
+CRITICAL RULES:
+- Only score muscle groups that are clearly visible
+- If a muscle group is not visible or unclear, set it to null
+- Never assume or estimate what you cannot see
+- Be objective and constructive
+
+Return ONLY this JSON with no other text:
+{
+    "overall_score": <0-100 based only on what is visible>,
+    "body_fat_estimate": "<range like 10-12%> or null if unclear",
+    "symmetry_score": <0-10> or null if both sides not visible,
+    "body_type": "<ectomorph/mesomorph/endomorph> or null if unclear",
+    "muscle_groups": {
+        "chest": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
+        "back": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
+        "shoulders": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
+        "arms": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
+        "legs": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
+        "core": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible
+    },
+    "posture": {
+        "overall": "<good/fair/poor>",
+        "head_position": "<forward/neutral/back> or null if not visible",
+        "shoulder_alignment": "<rounded/neutral/back> or null if not visible",
+        "hip_alignment": "<tilted/neutral> or null if not visible",
+        "feedback": "<specific posture feedback based only on what is visible>"
+    },
+    "visible_angles": ["<front/back/side - list what angles were provided>"],
+    "strengths": ["<strength 1>", "<strength 2>"],
+    "weaknesses": ["<weakness 1>", "<weakness 2>"],
+    "recommendations": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>"],
+    "note": "<any important note about what could not be assessed due to photo angles>"
+}"""
+    
+    content = image_parts + [prompt]
+    response = model.generate_content(content)
     
     result = response.text
     clean = result.replace("```json", "").replace("```", "").strip()
     scan_data = json.loads(clean)
     
-    # Save to Supabase
+    muscle_groups = scan_data.get("muscle_groups", {}) or {}
+    
     async with httpx.AsyncClient() as client:
         await client.post(
             "https://jfopizywtgaqhkbkjlyz.supabase.co/rest/v1/physique_scans",
@@ -356,12 +366,12 @@ async def scan_physique(
                 "body_fat_estimate": scan_data.get("body_fat_estimate"),
                 "symmetry_score": scan_data.get("symmetry_score"),
                 "body_type": scan_data.get("body_type"),
-                "chest_score": scan_data.get("muscle_groups", {}).get("chest", {}).get("score"),
-                "back_score": scan_data.get("muscle_groups", {}).get("back", {}).get("score"),
-                "shoulders_score": scan_data.get("muscle_groups", {}).get("shoulders", {}).get("score"),
-                "arms_score": scan_data.get("muscle_groups", {}).get("arms", {}).get("score"),
-                "legs_score": scan_data.get("muscle_groups", {}).get("legs", {}).get("score"),
-                "core_score": scan_data.get("muscle_groups", {}).get("core", {}).get("score"),
+                "chest_score": (muscle_groups.get("chest") or {}).get("score"),
+                "back_score": (muscle_groups.get("back") or {}).get("score"),
+                "shoulders_score": (muscle_groups.get("shoulders") or {}).get("score"),
+                "arms_score": (muscle_groups.get("arms") or {}).get("score"),
+                "legs_score": (muscle_groups.get("legs") or {}).get("score"),
+                "core_score": (muscle_groups.get("core") or {}).get("score"),
                 "posture_check": json.dumps(scan_data.get("posture")),
                 "strengths": scan_data.get("strengths"),
                 "weaknesses": scan_data.get("weaknesses"),
@@ -386,6 +396,28 @@ async def generate_workout(
     duration = request.get("duration", 60)
     focus = request.get("focus", "full body")
     
+    # Fetch latest physique scan silently
+    physique_context = ""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://jfopizywtgaqhkbkjlyz.supabase.co/rest/v1/physique_scans?user_id=eq.{user_id}&order=created_at.desc&limit=1",
+            headers={
+                "apikey": os.getenv("SUPABASE_ANON_KEY"),
+                "Authorization": f"Bearer {os.getenv('SUPABASE_ANON_KEY')}",
+            }
+        )
+        if response.status_code == 200:
+            scans = response.json()
+            if scans:
+                scan = scans[0]
+                weak_muscles = []
+                for muscle in ['chest', 'back', 'shoulders', 'arms', 'legs', 'core']:
+                    score = scan.get(f"{muscle}_score")
+                    if score is not None and score <= 5:
+                        weak_muscles.append(muscle)
+                if weak_muscles:
+                    physique_context = f"Priority muscles to develop: {', '.join(weak_muscles)}."
+    
     prompt = f"""You are an expert personal trainer. Create a workout plan and return ONLY a JSON object:
     {{
         "workout_name": "<creative workout name>",
@@ -408,6 +440,7 @@ async def generate_workout(
     Equipment available: {equipment}
     Workout duration: {duration} minutes
     Focus area: {focus}
+    {physique_context}
     
     Make it specific, progressive, and effective. Only return JSON."""
     
