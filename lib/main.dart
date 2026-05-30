@@ -99,6 +99,10 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.accessibility_new),
             label: 'Physique',
           ),
+          BottomNavigationBarItem(
+          icon: Icon(Icons.fitness_center),
+          label: 'Generate',
+        ),
         ],
       ),
     );
