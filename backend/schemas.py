@@ -17,12 +17,23 @@ class UserResponse(BaseModel):
 
 
 class WorkoutCreate(BaseModel):
-    user_id: int
     exercise: str
     sets: int | None = None
     reps: int | None = None
     weight: float | None = None
     duration: int | None = None
+
+
+class WorkoutBatchItem(BaseModel):
+    exercise: str
+    sets: int | None = None
+    reps: int | None = None
+    weight: float | None = None
+    duration: int | None = None
+
+
+class WorkoutBatchCreate(BaseModel):
+    exercises: list[WorkoutBatchItem]
 
 
 class WorkoutUpdate(BaseModel):
@@ -35,7 +46,7 @@ class WorkoutUpdate(BaseModel):
 
 class WorkoutResponse(BaseModel):
     id: int
-    user_id: int
+    user_id: str
     exercise: str
     sets: int | None = None
     reps: int | None = None
@@ -62,3 +73,20 @@ class WeeklySummary(BaseModel):
     week_start: str
     total_volume: float
     total_sessions: int
+
+
+class BodyweightLogCreate(BaseModel):
+    weight_kg: float
+
+
+class DashboardChart(BaseModel):
+    id: str
+    type: str
+    title: str
+    labels: list[str]
+    values: list[float]
+
+
+class DashboardResponse(BaseModel):
+    goal: str
+    charts: list[DashboardChart]

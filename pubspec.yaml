@@ -14,8 +14,10 @@ dependencies:
   http: ^1.2.0
   supabase_flutter: ^2.3.0
   image_picker: ^1.2.2
+  shared_preferences: ^2.5.3
+  purchases_flutter: ^8.6.0
+  fl_chart: ^0.70.2
 
-  
 
 dev_dependencies:
   flutter_test:

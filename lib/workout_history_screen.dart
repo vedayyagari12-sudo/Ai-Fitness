@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
+import 'theme/app_theme.dart';
 
 class WorkoutHistoryScreen extends StatefulWidget {
   const WorkoutHistoryScreen({super.key});
@@ -21,11 +22,11 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
   void loadWorkouts() async {
     if (!mounted) return;
-  final data = await getWorkouts(1);
-  if (!mounted) return;
-  setState(() {
-    workouts = data;
-    isLoading = false;
+    final data = await getWorkouts();
+    if (!mounted) return;
+    setState(() {
+      workouts = data;
+      isLoading = false;
     });
   }
 
@@ -55,12 +56,20 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                       margin: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
                       child: ListTile(
-                        title: Text(w['exercise'] ?? ''),
+                        title: Text(
+                          w['exercise'] ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         subtitle: Text(
-                            'Sets: ${w['sets']} | Reps: ${w['reps']} | Weight: ${w['weight']}lbs'),
+                          'Sets: ${w['sets']} | Reps: ${w['reps']} | Weight: ${w['weight']}lbs',
+                          style: const TextStyle(color: AppColors.textSecondary),
+                        ),
                         trailing: Text(
                           'Vol: ${w['volume']?.toStringAsFixed(1) ?? 'N/A'}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.accent,
+                          ),
                         ),
                       ),
                     );

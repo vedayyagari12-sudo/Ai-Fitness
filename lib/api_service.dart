@@ -13,6 +13,10 @@ Map<String, String> getHeaders() {
   };
 }
 
+String? getCurrentUserId() {
+  return Supabase.instance.client.auth.currentUser?.id;
+}
+
 Future<bool> testConnection() async {
   try {
     final response = await http.get(
@@ -25,7 +29,9 @@ Future<bool> testConnection() async {
   }
 }
 
-Future<List<dynamic>> getWorkouts(int userId) async {
+Future<List<dynamic>> getWorkouts() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return [];
   final response = await http.get(
     Uri.parse('$baseUrl/workouts/user/$userId'),
     headers: getHeaders(),
@@ -45,10 +51,21 @@ Future<bool> createWorkout(Map<String, dynamic> workout) async {
   return response.statusCode == 200;
 }
 
-Future<Map<String, dynamic>?> getExerciseStats(int userId, String exercise) async {
+Future<bool> saveWorkoutBatch(List<Map<String, dynamic>> exercises) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/workouts/batch'),
+    headers: getHeaders(),
+    body: jsonEncode({'exercises': exercises}),
+  );
+  return response.statusCode == 200;
+}
+
+Future<Map<String, dynamic>?> getDashboard() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
   try {
     final response = await http.get(
-      Uri.parse('$baseUrl/users/$userId/exercises/$exercise/stats'),
+      Uri.parse('$baseUrl/dashboard/$userId'),
       headers: getHeaders(),
     );
     if (response.statusCode == 200) {
@@ -58,4 +75,71 @@ Future<Map<String, dynamic>?> getExerciseStats(int userId, String exercise) asyn
   } catch (e) {
     return null;
   }
+}
+
+Future<bool> logBodyweight(double weightKg) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/bodyweight/log'),
+    headers: getHeaders(),
+    body: jsonEncode({'weight_kg': weightKg}),
+  );
+  return response.statusCode == 200;
+}
+
+int parseReps(dynamic reps) {
+  if (reps == null) return 0;
+  if (reps is int) return reps;
+  if (reps is double) return reps.round();
+  final text = reps.toString();
+  final range = RegExp(r'(\d+)\s*[-–]\s*(\d+)').firstMatch(text);
+  if (range != null) {
+    final low = int.parse(range.group(1)!);
+    final high = int.parse(range.group(2)!);
+    return ((low + high) / 2).round();
+  }
+  final single = RegExp(r'\d+').firstMatch(text);
+  return single != null ? int.parse(single.group(0)!) : 0;
+}
+
+String mapOnboardingGoalToProfile(String? goal) {
+  switch (goal) {
+    case 'Build Muscle':
+      return 'bulk';
+    case 'Lose Weight':
+      return 'cut';
+    case 'General Fitness':
+      return 'maintain';
+    case 'Athletic Performance':
+    case 'Improve Endurance':
+      return 'athletic';
+    default:
+      return 'maintain';
+  }
+}
+
+Future<void> upsertUserProfile(Map<String, dynamic> profile) async {
+  final userId = getCurrentUserId();
+  if (userId == null) return;
+  await Supabase.instance.client.from('user_profiles').upsert({
+    'id': userId,
+    ...profile,
+    'updated_at': DateTime.now().toIso8601String(),
+  });
+}
+
+Future<void> syncOnboardingToProfile(dynamic data) async {
+  final userId = getCurrentUserId();
+  if (userId == null) return;
+  await Supabase.instance.client.from('user_profiles').upsert({
+    'id': userId,
+    'goal': mapOnboardingGoalToProfile(data.goal as String?),
+    'gender': data.gender,
+    'age': data.age,
+    'height_cm': data.heightCm,
+    'weight_kg': data.weightKg,
+    'workout_frequency': data.workoutFrequency,
+    'equipment': data.equipment,
+    'fitness_level': data.fitnessLevel,
+    'updated_at': DateTime.now().toIso8601String(),
+  });
 }

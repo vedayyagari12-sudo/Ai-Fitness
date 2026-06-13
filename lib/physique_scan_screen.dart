@@ -3,11 +3,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'theme/app_theme.dart';
+import 'theme/app_widgets.dart';
 
 const String physiqueBaseUrl = 'https://fitness-app-xayv.onrender.com';
 
 class PhysiqueScanScreen extends StatefulWidget {
-  const PhysiqueScanScreen({super.key});
+  const PhysiqueScanScreen({super.key, this.initialImagePath});
+
+  final String? initialImagePath;
 
   @override
   State<PhysiqueScanScreen> createState() => _PhysiqueScanScreenState();
@@ -19,6 +23,14 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
   bool isLoading = false;
   String message = '';
   List<XFile> selectedImages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialImagePath != null) {
+      selectedImages = [XFile(widget.initialImagePath!)];
+    }
+  }
 
   Future<void> addPhoto(ImageSource source) async {
     final XFile? image = await picker.pickImage(
@@ -138,9 +150,9 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Add photos from different angles for the most accurate analysis',
-              style: TextStyle(color: Colors.grey),
+              style: secondaryTextStyle(context),
             ),
             const SizedBox(height: 12),
             Row(
@@ -192,16 +204,16 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
             if (message.isNotEmpty) Text(message),
             if (result != null) ...[
               // Overall Score
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+              AppCard(
+                margin: EdgeInsets.zero,
+                child: Column(
                     children: [
                       Text(
                         '${result!['overall_score']}/100',
                         style: const TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.bold,
+                          color: AppColors.accent,
                         ),
                       ),
                       const Text('Overall Physique Score'),
@@ -217,16 +229,14 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                             (result!['visible_angles'] as List).join(', ')),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 12),
 
               // Muscle Groups - only show visible ones
               if (result!['muscle_groups'] != null)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                AppCard(
+                  margin: EdgeInsets.zero,
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Muscle Groups',
@@ -234,7 +244,8 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                                 fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         const Text('Powered by AI',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textMuted)),
                         const SizedBox(height: 12),
                         ...['chest', 'back', 'shoulders', 'arms', 'legs', 'core']
                             .where((muscle) =>
@@ -249,7 +260,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                               Text(
                                 data['feedback'] ?? '',
                                 style: const TextStyle(
-                                    fontSize: 12, color: Colors.grey),
+                                    fontSize: 12, color: AppColors.textSecondary),
                               ),
                               const SizedBox(height: 8),
                             ],
@@ -257,16 +268,14 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                         }),
                       ],
                     ),
-                  ),
                 ),
               const SizedBox(height: 12),
 
               // Posture
               if (result!['posture'] != null)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                AppCard(
+                  margin: EdgeInsets.zero,
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Posture Analysis',
@@ -288,16 +297,14 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                           Text(result!['posture']['feedback']),
                       ],
                     ),
-                  ),
                 ),
               const SizedBox(height: 12),
 
               // Strengths
               if ((result!['strengths'] as List? ?? []).isNotEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                AppCard(
+                  margin: EdgeInsets.zero,
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Strengths ✅',
@@ -310,16 +317,14 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                             )),
                       ],
                     ),
-                  ),
                 ),
               const SizedBox(height: 12),
 
               // Weaknesses
               if ((result!['weaknesses'] as List? ?? []).isNotEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                AppCard(
+                  margin: EdgeInsets.zero,
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Needs Work ⚠️',
@@ -332,16 +337,14 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                             )),
                       ],
                     ),
-                  ),
                 ),
               const SizedBox(height: 12),
 
               // Recommendations
               if ((result!['recommendations'] as List? ?? []).isNotEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                AppCard(
+                  margin: EdgeInsets.zero,
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Recommendations 💪',
@@ -356,25 +359,13 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                                 )),
                       ],
                     ),
-                  ),
                 ),
 
               // Note about what couldn't be assessed
               if (result!['note'] != null)
-                Card(
-                  color: Colors.amber.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('📸 Note',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text(result!['note'] ?? ''),
-                      ],
-                    ),
-                  ),
+                AppWarningCard(
+                  title: '📸 Note',
+                  body: result!['note'] ?? '',
                 ),
             ],
           ],
