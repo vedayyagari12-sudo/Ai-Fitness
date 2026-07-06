@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/app_state_service.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/app_widgets.dart';
-import '../paywall/paywall_screen.dart';
+import '../settings/settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -30,7 +29,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
-    final email = user?.email ?? (AppStateService.isGuestMode ? 'Guest' : 'Not signed in');
+    final email =
+        user?.email ??
+        (AppStateService.isGuestMode ? 'Guest' : 'Not signed in');
     final fitnessLevel = _onboarding?['fitness_level'] as String?;
     final goal = _onboarding?['goal'] as String?;
 
@@ -43,17 +44,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Text(
-                  'Profile',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1.0,
-                    foreground: Paint()
-                      ..shader = const LinearGradient(
-                        colors: [AppColors.textPrimary, AppColors.textSecondary],
-                      ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0)),
-                  ),
+                child: Row(
+                  children: [
+                    if (Navigator.of(context).canPop()) ...[
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 12, top: 6),
+                          child: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 22,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                    Text(
+                      'Profile',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.0,
+                        foreground: Paint()
+                          ..shader =
+                              LinearGradient(
+                                colors: [
+                                  AppColors.textPrimary,
+                                  AppColors.textSecondary,
+                                ],
+                              ).createShader(
+                                const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -103,7 +128,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.accent.withValues(alpha: 0.25),
+                                  color: AppColors.accent.withValues(
+                                    alpha: 0.25,
+                                  ),
                                   blurRadius: 16,
                                   spreadRadius: 2,
                                 ),
@@ -122,7 +149,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               children: [
                                 Text(
                                   email,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.textPrimary,
@@ -136,7 +163,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.accent.withValues(alpha: 0.12),
+                                    color: AppColors.accent.withValues(
+                                      alpha: 0.12,
+                                    ),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
@@ -197,7 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (_onboarding != null) ...[
                       Container(
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
+                          gradient: LinearGradient(
                             colors: [AppColors.surface, AppColors.background],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -211,10 +240,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.fitness_center_outlined,
-                                    size: 18, color: AppColors.accent),
+                                const Icon(
+                                  Icons.fitness_center_outlined,
+                                  size: 18,
+                                  color: AppColors.accent,
+                                ),
                                 const SizedBox(width: 8),
-                                const Text(
+                                Text(
                                   'Your Plan',
                                   style: TextStyle(
                                     fontSize: 16,
@@ -227,33 +259,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             const SizedBox(height: 16),
                             _planRow('Goal', _onboarding!['goal']),
                             _planRow('Equipment', _onboarding!['equipment']),
-                            _planRow('Frequency', _onboarding!['workout_frequency']),
-                            _planRow('Fitness Level', _onboarding!['fitness_level']),
+                            _planRow(
+                              'Frequency',
+                              _onboarding!['workout_frequency'],
+                            ),
+                            _planRow(
+                              'Fitness Level',
+                              _onboarding!['fitness_level'],
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
                     ],
 
-                    // Actions
-                    FeatureHubTile(
-                      title: 'Upgrade to Pro',
-                      subtitle: 'Unlock all AI features',
-                      icon: Icons.workspace_premium,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PaywallScreen(onComplete: () {
-                            Navigator.pop(context);
-                          }),
+                    // Account section
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 4),
+                        child: Text(
+                          'ACCOUNT',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                          ),
                         ),
                       ),
                     ),
-                    FeatureHubTile(
-                      title: 'Sign Out',
-                      subtitle: 'Log out of your account',
+                    _accountRow(
+                      icon: Icons.settings_outlined,
+                      label: 'Settings',
+                      sub: 'Privacy, account, legal',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      ),
+                    ),
+                    Divider(height: 1, color: AppColors.divider),
+                    _accountRow(
                       icon: Icons.logout,
-                      accentColor: AppColors.error,
+                      label: 'Sign Out',
+                      color: AppColors.error,
                       onTap: () async {
                         AppStateService.setGuestMode(false);
                         await Supabase.instance.client.auth.signOut();
@@ -263,9 +314,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
@@ -298,7 +347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 10),
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
@@ -308,13 +357,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textMuted,
               ),
               textAlign: TextAlign.center,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _accountRow({
+    required IconData icon,
+    required String label,
+    String? sub,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    final c = color ?? AppColors.textPrimary;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: c),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: c,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (sub != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      sub,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
           ],
         ),
       ),
@@ -330,10 +427,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -343,7 +437,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: Text(
               '$value',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
                 color: AppColors.textPrimary,

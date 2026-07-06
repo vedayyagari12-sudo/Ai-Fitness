@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'main.dart';
-import 'services/app_state_service.dart';
+import 'screens/settings/settings_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_widgets.dart';
 
@@ -64,10 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted) setState(() => isLoading = false);
   }
 
-  Future<void> _socialAuth(String provider) async {
-    setState(() => message = '$provider sign-in coming soon');
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,66 +114,58 @@ class _LoginScreenState extends State<LoginScreen> {
               physics: const BouncingScrollPhysics(),
               child: Container(
                 constraints: BoxConstraints(
-                  minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
+                  minHeight:
+                      MediaQuery.of(context).size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 32,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 40),
-                    
-                    // Logo Icon Container
+
+                    // FITAI wordmark
                     Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: AppColors.accent.withValues(alpha: 0.3),
-                            width: 1.5,
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 46,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -2,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.accent.withValues(alpha: 0.08),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
+                          children: [
+                            TextSpan(
+                              text: 'FIT',
+                              style: TextStyle(color: AppColors.textPrimary),
+                            ),
+                            TextSpan(
+                              text: 'AI',
+                              style: TextStyle(color: AppColors.accent),
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.fitness_center,
-                          size: 40,
-                          color: AppColors.accent,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Text(
+                        'BUILT FOR SERIOUS ATHLETES',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2.0,
                         ),
                       ),
                     ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    const Text(
-                      'Log in or sign up',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Welcome to AI Fitness. Train smarter today.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 40),
+
+                    const SizedBox(height: 48),
 
                     // Inputs and Main Form section with cross-fade animation
                     AnimatedSwitcher(
@@ -199,69 +186,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? _buildEmailStep()
                           : _buildPasswordStep(),
                     ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Divider
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'or',
-                            style: secondaryTextStyle(context, fontSize: 13),
-                          ),
-                        ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Social Sign-Ins
-                    SocialAuthButton(
-                      label: 'Continue with Google',
-                      icon: Icons.g_mobiledata,
-                      onPressed: () => _socialAuth('Google'),
-                    ),
-                    const SizedBox(height: 12),
-                    SocialAuthButton(
-                      label: 'Continue with Apple',
-                      icon: Icons.apple,
-                      onPressed: () => _socialAuth('Apple'),
-                    ),
-                    const SizedBox(height: 24),
-                    TextButton(
-                      onPressed: () {
-                        AppStateService.setGuestMode(true);
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const MainScreen()),
-                        );
-                      },
-                      child: const Text(
-                        'Continue as Guest',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.accent,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    
+
                     if (message.isNotEmpty) ...[
                       const SizedBox(height: 24),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: message.startsWith('❌') 
-                              ? AppColors.error.withValues(alpha: 0.1) 
+                          color: message.startsWith('❌')
+                              ? AppColors.error.withValues(alpha: 0.1)
                               : AppColors.accent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: message.startsWith('❌') 
-                                ? AppColors.error.withValues(alpha: 0.3) 
+                            color: message.startsWith('❌')
+                                ? AppColors.error.withValues(alpha: 0.3)
                                 : AppColors.accent.withValues(alpha: 0.3),
                           ),
                         ),
@@ -271,11 +211,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: message.startsWith('❌') ? AppColors.error : AppColors.accent,
+                            color: message.startsWith('❌')
+                                ? AppColors.error
+                                : AppColors.accent,
                           ),
                         ),
                       ),
                     ],
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _legalLink(context, 'Privacy Policy'),
+                        Text(
+                          '  ·  ',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        _legalLink(context, 'Terms of Service'),
+                      ],
+                    ),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -283,6 +240,24 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _legalLink(BuildContext context, String label) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => SettingsScreen()),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 12,
+          decoration: TextDecoration.underline,
+          decorationColor: AppColors.textMuted,
+        ),
       ),
     );
   }

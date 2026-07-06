@@ -33,9 +33,15 @@ class SummaryScreen extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                             letterSpacing: -1.0,
                             foreground: Paint()
-                              ..shader = const LinearGradient(
-                                colors: [AppColors.textPrimary, AppColors.textSecondary],
-                              ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0)),
+                              ..shader =
+                                  LinearGradient(
+                                    colors: [
+                                      AppColors.textPrimary,
+                                      AppColors.textSecondary,
+                                    ],
+                                  ).createShader(
+                                    const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0),
+                                  ),
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -63,10 +69,14 @@ class SummaryScreen extends StatelessWidget {
                             color: Colors.black.withValues(alpha: 0.2),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
-                          )
+                          ),
                         ],
                       ),
-                      child: const Icon(Icons.person_outline, size: 22, color: AppColors.textPrimary),
+                      child: Icon(
+                        Icons.person_outline,
+                        size: 22,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -152,7 +162,7 @@ class SummaryScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.surface, AppColors.background],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -166,9 +176,13 @@ class SummaryScreen extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.show_chart_outlined, color: AppColors.accent, size: 20),
+                          const Icon(
+                            Icons.show_chart_outlined,
+                            color: AppColors.accent,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             'Weekly Calorie Burn',
                             style: TextStyle(
                               fontSize: 16,
@@ -213,13 +227,19 @@ class SummaryScreen extends StatelessWidget {
                     title: 'Step Count',
                     value: '1,552',
                     unit: 'steps',
-                    chart: const MiniBarChart(values: stepChart, barColor: AppColors.ringExercise),
+                    chart: const MiniBarChart(
+                      values: stepChart,
+                      barColor: AppColors.ringExercise,
+                    ),
                   ),
                   _buildStatCard(
                     title: 'Step Distance',
                     value: '0.69',
                     unit: 'MI',
-                    chart: const MiniBarChart(values: distChart, barColor: AppColors.ringStand),
+                    chart: const MiniBarChart(
+                      values: distChart,
+                      barColor: AppColors.ringStand,
+                    ),
                   ),
                 ]),
               ),
@@ -278,9 +298,13 @@ class SummaryScreen extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.insights_outlined, size: 20, color: AppColors.accent),
+                            const Icon(
+                              Icons.insights_outlined,
+                              size: 20,
+                              color: AppColors.accent,
+                            ),
                             const SizedBox(width: 8),
-                            const Text(
+                            Text(
                               'Weekly Overview',
                               style: TextStyle(
                                 fontSize: 16,
@@ -305,9 +329,27 @@ class SummaryScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _miniRing('Exercise', 12, 30, AppColors.ringExercise, '40%'),
-                            _miniRing('Stand', 8, 12, AppColors.ringStand, '66%'),
-                            _miniRing('Move', 46, 250, AppColors.ringMove, '18%'),
+                            _miniRing(
+                              'Exercise',
+                              12,
+                              30,
+                              AppColors.ringExercise,
+                              '40%',
+                            ),
+                            _miniRing(
+                              'Stand',
+                              8,
+                              12,
+                              AppColors.ringStand,
+                              '66%',
+                            ),
+                            _miniRing(
+                              'Move',
+                              46,
+                              250,
+                              AppColors.ringMove,
+                              '18%',
+                            ),
                           ],
                         ),
                       ],
@@ -316,9 +358,7 @@ class SummaryScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
@@ -353,7 +393,7 @@ class SummaryScreen extends StatelessWidget {
             children: [
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
@@ -363,7 +403,7 @@ class SummaryScreen extends StatelessWidget {
                 const SizedBox(width: 2),
                 Text(
                   unit,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textSecondary,
@@ -375,7 +415,7 @@ class SummaryScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: AppColors.textMuted,
@@ -404,7 +444,7 @@ class SummaryScreen extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       padding: const EdgeInsets.all(16),
@@ -415,7 +455,7 @@ class SummaryScreen extends StatelessWidget {
             children: [
               Text(
                 title.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary,
@@ -434,7 +474,7 @@ class SummaryScreen extends StatelessWidget {
             children: [
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
@@ -444,7 +484,7 @@ class SummaryScreen extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 unit,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary,
@@ -452,16 +492,19 @@ class SummaryScreen extends StatelessWidget {
               ),
             ],
           ),
-          if (chart != null) ...[
-            const Spacer(),
-            chart,
-          ],
+          if (chart != null) ...[const Spacer(), chart],
         ],
       ),
     );
   }
 
-  Widget _miniRing(String label, double current, double goal, Color color, String percent) {
+  Widget _miniRing(
+    String label,
+    double current,
+    double goal,
+    Color color,
+    String percent,
+  ) {
     return Column(
       children: [
         Stack(
@@ -476,7 +519,7 @@ class SummaryScreen extends StatelessWidget {
             ),
             Text(
               percent,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
@@ -487,7 +530,7 @@ class SummaryScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
@@ -499,7 +542,11 @@ class SummaryScreen extends StatelessWidget {
 }
 
 class PremiumLineChart extends StatelessWidget {
-  const PremiumLineChart({super.key, required this.values, this.color = AppColors.accent});
+  const PremiumLineChart({
+    super.key,
+    required this.values,
+    this.color = AppColors.accent,
+  });
 
   final List<double> values;
   final Color color;
@@ -521,14 +568,16 @@ class PremiumLineChart extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: days
-              .map((d) => Text(
-                    d,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textMuted,
-                    ),
-                  ))
+              .map(
+                (d) => Text(
+                  d,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              )
               .toList(),
         ),
       ],
@@ -589,14 +638,20 @@ class _LineChartPainter extends CustomPainter {
       final controlPointX = p0.dx + (p1.dx - p0.dx) / 2;
 
       linePath.cubicTo(
-        controlPointX, p0.dy,
-        controlPointX, p1.dy,
-        p1.dx, p1.dy,
+        controlPointX,
+        p0.dy,
+        controlPointX,
+        p1.dy,
+        p1.dx,
+        p1.dy,
       );
       fillPath.cubicTo(
-        controlPointX, p0.dy,
-        controlPointX, p1.dy,
-        p1.dx, p1.dy,
+        controlPointX,
+        p0.dy,
+        controlPointX,
+        p1.dy,
+        p1.dx,
+        p1.dy,
       );
     }
 

@@ -5,9 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/onboarding_data.dart';
 import '../../api_service.dart';
 import '../../services/app_state_service.dart';
+import '../../services/permission_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
-import '../paywall/paywall_screen.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key, required this.onComplete});
@@ -41,9 +41,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await AppStateService.completeOnboarding(_data);
     await syncOnboardingToProfile(_data);
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => PaywallScreen(onComplete: widget.onComplete)),
-    );
+    widget.onComplete();
   }
 
   void _computeFitnessLevel() {
@@ -66,7 +64,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       case 2:
         return _data.gender != null;
       case 3:
-        return _data.age != null && _data.heightCm != null && _data.weightKg != null;
+        return _data.age != null &&
+            _data.heightCm != null &&
+            _data.weightKg != null;
       case 4:
         return _data.workoutFrequency != null;
       case 5:
@@ -93,10 +93,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget _buildStep() {
     switch (_step) {
       case 0:
-        return _WelcomeStep(
-          key: const ValueKey(0),
-          onContinue: _next,
-        );
+        return _WelcomeStep(key: const ValueKey(0), onContinue: _next);
       case 1:
         return _GoalStep(
           key: const ValueKey(1),
@@ -196,7 +193,11 @@ class _ParticlePainter extends CustomPainter {
     final paint = Paint()..style = PaintingStyle.fill;
     for (final p in particles) {
       paint.color = color.withValues(alpha: p.opacity);
-      canvas.drawCircle(Offset(p.x * size.width, p.y * size.height), p.size, paint);
+      canvas.drawCircle(
+        Offset(p.x * size.width, p.y * size.height),
+        p.size,
+        paint,
+      );
     }
   }
 
@@ -213,7 +214,8 @@ class _WelcomeStep extends StatefulWidget {
   State<_WelcomeStep> createState() => _WelcomeStepState();
 }
 
-class _WelcomeStepState extends State<_WelcomeStep> with TickerProviderStateMixin {
+class _WelcomeStepState extends State<_WelcomeStep>
+    with TickerProviderStateMixin {
   late final AnimationController _bgController;
   late final AnimationController _particleController;
   final List<_Particle> _particles = [];
@@ -227,10 +229,10 @@ class _WelcomeStepState extends State<_WelcomeStep> with TickerProviderStateMixi
       duration: const Duration(seconds: 10),
     )..repeat();
 
-    _particleController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..addListener(_updateParticles)..repeat();
+    _particleController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 2))
+          ..addListener(_updateParticles)
+          ..repeat();
 
     // Initialize particles
     for (int i = 0; i < 25; i++) {
@@ -340,7 +342,7 @@ class _WelcomeStepState extends State<_WelcomeStep> with TickerProviderStateMixi
                       ),
                     ),
                     const SizedBox(height: 36),
-                    const Text(
+                    Text(
                       'Train smarter\nwith AI',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -352,7 +354,7 @@ class _WelcomeStepState extends State<_WelcomeStep> with TickerProviderStateMixi
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const Text(
+                    Text(
                       'Personalized workouts, calorie scanning, and physique analysis — all in one sleek app.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -367,7 +369,7 @@ class _WelcomeStepState extends State<_WelcomeStep> with TickerProviderStateMixi
                       label: 'Get Started',
                     ),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'Takes about 2 minutes',
                       style: TextStyle(
                         fontSize: 13,
@@ -420,12 +422,14 @@ class _GoalStep extends StatelessWidget {
       totalSteps: 8,
       child: Column(
         children: _goals
-            .map((g) => SelectionTile(
-                  label: g.$1,
-                  icon: g.$2,
-                  selected: selected == g.$1,
-                  onTap: () => onSelect(g.$1),
-                ))
+            .map(
+              (g) => SelectionTile(
+                label: g.$1,
+                icon: g.$2,
+                selected: selected == g.$1,
+                onTap: () => onSelect(g.$1),
+              ),
+            )
             .toList(),
       ),
     );
@@ -458,11 +462,13 @@ class _GenderStep extends StatelessWidget {
       totalSteps: 8,
       child: Column(
         children: ['Male', 'Female', 'Other']
-            .map((g) => SelectionTile(
-                  label: g,
-                  selected: selected == g,
-                  onTap: () => onSelect(g),
-                ))
+            .map(
+              (g) => SelectionTile(
+                label: g,
+                selected: selected == g,
+                onTap: () => onSelect(g),
+              ),
+            )
             .toList(),
       ),
     );
@@ -489,11 +495,14 @@ class _BodyStatsStep extends StatefulWidget {
 
 class _BodyStatsStepState extends State<_BodyStatsStep> {
   late final _ageCtrl = TextEditingController(
-      text: widget.data.age?.toString() ?? '');
+    text: widget.data.age?.toString() ?? '',
+  );
   late final _heightCtrl = TextEditingController(
-      text: widget.data.heightCm?.toString() ?? '');
+    text: widget.data.heightCm?.toString() ?? '',
+  );
   late final _weightCtrl = TextEditingController(
-      text: widget.data.weightKg?.toString() ?? '');
+    text: widget.data.weightKg?.toString() ?? '',
+  );
 
   void _sync() {
     widget.data.age = int.tryParse(_ageCtrl.text);
@@ -589,7 +598,7 @@ class _FrequencyStep extends StatelessWidget {
           ),
           SelectionTile(
             label: '6+',
-            subtitle: 'Dedicated athlete',
+            subtitle: 'Most days of the week',
             selected: selected == '6+',
             onTap: () => onSelect('6+'),
           ),
@@ -633,12 +642,14 @@ class _EquipmentStep extends StatelessWidget {
       totalSteps: 8,
       child: Column(
         children: _options
-            .map((o) => SelectionTile(
-                  label: o.$1,
-                  subtitle: o.$2,
-                  selected: selected == o.$1,
-                  onTap: () => onSelect(o.$1),
-                ))
+            .map(
+              (o) => SelectionTile(
+                label: o.$1,
+                subtitle: o.$2,
+                selected: selected == o.$1,
+                onTap: () => onSelect(o.$1),
+              ),
+            )
             .toList(),
       ),
     );
@@ -679,12 +690,14 @@ class _SourceStep extends StatelessWidget {
       totalSteps: 8,
       child: Column(
         children: _sources
-            .map((s) => SelectionTile(
-                  label: s.$1,
-                  icon: s.$2,
-                  selected: selected == s.$1,
-                  onTap: () => onSelect(s.$1),
-                ))
+            .map(
+              (s) => SelectionTile(
+                label: s.$1,
+                icon: s.$2,
+                selected: selected == s.$1,
+                onTap: () => onSelect(s.$1),
+              ),
+            )
             .toList(),
       ),
     );
@@ -747,7 +760,8 @@ class _InitialPhysiqueScanStep extends StatefulWidget {
   final VoidCallback onContinue;
 
   @override
-  State<_InitialPhysiqueScanStep> createState() => _InitialPhysiqueScanStepState();
+  State<_InitialPhysiqueScanStep> createState() =>
+      _InitialPhysiqueScanStepState();
 }
 
 class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
@@ -761,6 +775,8 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
   }
 
   Future<void> _pick(ImageSource source) async {
+    final granted = await PermissionService.requestCameraAndMedia(context);
+    if (!granted) return;
     try {
       final file = await _picker.pickImage(
         source: source,
@@ -785,7 +801,8 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
 
     return OnboardingScaffold(
       title: 'Initial Physique Scan',
-      subtitle: 'Upload a starting photo to track your posture, shape, and muscle changes.',
+      subtitle:
+          'Upload a starting photo to track your posture, shape, and muscle changes.',
       onBack: widget.onBack,
       onContinue: widget.onContinue,
       continueLabel: hasImage ? 'Continue' : 'Skip for Now',
@@ -806,7 +823,7 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
                   height: 145,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: hasImage 
+                    color: hasImage
                         ? AppColors.accent.withValues(alpha: 0.12)
                         : Colors.transparent,
                     boxShadow: hasImage
@@ -833,11 +850,8 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: hasImage
-                      ? Image.file(
-                          File(_localImagePath!),
-                          fit: BoxFit.cover,
-                        )
-                      : const Icon(
+                      ? Image.file(File(_localImagePath!), fit: BoxFit.cover)
+                      : Icon(
                           Icons.accessibility_new_outlined,
                           size: 48,
                           color: AppColors.textMuted,
@@ -858,7 +872,7 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
                   label: const Text('Camera'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -874,7 +888,7 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
                   label: const Text('Gallery'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -903,7 +917,7 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Privacy & Compliance Shield',
                         style: TextStyle(
                           fontSize: 14,

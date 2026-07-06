@@ -87,6 +87,24 @@ class DashboardChart(BaseModel):
     values: list[float]
 
 
+class TodayStats(BaseModel):
+    calories: float
+    protein: float
+    carbs: float = 0.0
+    fat: float = 0.0
+    sessions: int
+    calorie_target: float
+    protein_target: float
+    weight: float = 0.0
+    weight_change: float = 0.0
+    body_fat: float = 0.0
+    body_fat_change: float = 0.0
+    volume: float = 0.0
+
+
 class DashboardResponse(BaseModel):
     goal: str
     charts: list[DashboardChart]
+    today_stats: TodayStats | None = None
+    recent_meals: list[dict] = []
+    recent_scans: list[dict] = []

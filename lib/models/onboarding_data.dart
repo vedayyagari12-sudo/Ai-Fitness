@@ -12,16 +12,16 @@ class OnboardingData {
   String? initialPhysiqueImagePath;
 
   Map<String, dynamic> toJson() => {
-        'goal': goal,
-        'gender': gender,
-        'age': age,
-        'height_cm': heightCm,
-        'weight_kg': weightKg,
-        'workout_frequency': workoutFrequency,
-        'equipment': equipment,
-        'hear_about_source': hearAboutSource,
-        'tried_other_apps': triedOtherApps,
-        'fitness_level': fitnessLevel,
-        'initial_physique_image_path': initialPhysiqueImagePath,
-      };
+    'goal': goal,
+    'gender': gender,
+    'age': age,
+    'height_cm': heightCm,
+    'weight_kg': weightKg,
+    'workout_frequency': workoutFrequency,
+    'equipment': equipment,
+    'hear_about_source': hearAboutSource,
+    'tried_other_apps': triedOtherApps,
+    'fitness_level': fitnessLevel,
+    'initial_physique_image_path': initialPhysiqueImagePath,
+  };
 }

@@ -1,35 +1,25 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'login_screen.dart';
-import 'dashboard_screen.dart';
-import 'screens/onboarding/onboarding_flow.dart';
-import 'screens/profile/profile_screen.dart';
-import 'screens/workouts/workouts_hub_screen.dart';
 import 'api_service.dart';
+import 'dashboard_screen.dart' show DashboardScreen, triggerDashboardRefresh;
+import 'login_screen.dart';
+import 'screens/onboarding/onboarding_flow.dart';
+import 'screens/body/body_screen.dart';
+import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
+import 'workout_generator_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ThemeController.load();
   await Supabase.initialize(
     url: 'https://jfopizywtgaqhkbkjlyz.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmb3Bpenl3dGdhcWhrYmtqbHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDU0NTYsImV4cCI6MjA5MDcyMTQ1Nn0.Y2CbDOSoVA3AP8E6JZJ0Vi6p1LE8U4WO87PXAkRQIOk',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmb3Bpenl3dGdhcWhrYmtqbHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDU0NTYsImV4cCI6MjA5MDcyMTQ1Nn0.Y2CbDOSoVA3AP8E6JZJ0Vi6p1LE8U4WO87PXAkRQIOk',
   );
-  await _initRevenueCat();
   runApp(const MyApp());
-}
-
-Future<void> _initRevenueCat() async {
-  try {
-    await Purchases.setLogLevel(LogLevel.debug);
-    await Purchases.configure(
-      PurchasesConfiguration('YOUR_REVENUECAT_API_KEY'),
-    );
-  } catch (_) {
-    // RevenueCat keys are configured per platform before release.
-  }
 }
 
 class MyApp extends StatelessWidget {
@@ -37,80 +27,103 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'AI Fitness',
-      theme: AppTheme.darkTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
-      home: const AppBootstrap(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.mode,
+      builder: (_, mode, _) {
+        final platformB =
+            WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        AppColors.brightness = switch (mode) {
+          ThemeMode.light => Brightness.light,
+          ThemeMode.dark => Brightness.dark,
+          ThemeMode.system => platformB,
+        };
+        return MaterialApp(
+          title: 'FitAI',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: mode,
+          home: const AppBootstrap(),
+        );
+      },
     );
   }
 }
 
-class AppBootstrap extends StatefulWidget {
+// Auth stream comes first — no onboarding before login.
+class AppBootstrap extends StatelessWidget {
   const AppBootstrap({super.key});
 
-  @override
-  State<AppBootstrap> createState() => _AppBootstrapState();
-}
-
-class _AppBootstrapState extends State<AppBootstrap> {
-  bool _loading = true;
-  bool _onboardingComplete = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkState();
-  }
-
-  Future<void> _checkState() async {
-    final done = await AppStateService.isOnboardingComplete();
-    if (!mounted) return;
-    setState(() {
-      _onboardingComplete = done;
-      _loading = false;
-    });
-  }
-
-  void _onOnboardingDone() {
-    setState(() => _onboardingComplete = true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (!_onboardingComplete) {
-      return OnboardingFlow(onComplete: _onOnboardingDone);
-    }
-    return const AuthGate();
-  }
-}
-
-class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
-
-  @override
-  State<AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        final session = snapshot.data?.session;
-        if (session != null || AppStateService.isGuestMode) {
-          return const MainScreen();
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
-        return const LoginScreen();
+        final session = snapshot.data?.session;
+        if (session == null) return const LoginScreen();
+        return const _OnboardingGate();
       },
     );
+  }
+}
+
+// After auth, check whether onboarding is needed.
+class _OnboardingGate extends StatefulWidget {
+  const _OnboardingGate();
+
+  @override
+  State<_OnboardingGate> createState() => _OnboardingGateState();
+}
+
+class _OnboardingGateState extends State<_OnboardingGate> {
+  bool? _onboardingDone;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    // Fast path: local flag set on this device
+    if (await AppStateService.isOnboardingComplete()) {
+      if (mounted) setState(() => _onboardingDone = true);
+      return;
+    }
+    // Reinstall / new device: check if profile exists in Supabase
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid != null) {
+      try {
+        final row = await Supabase.instance.client
+            .from('user_profiles')
+            .select('id')
+            .eq('id', uid)
+            .maybeSingle();
+        if (row != null) {
+          await AppStateService.markOnboardingComplete();
+          if (mounted) setState(() => _onboardingDone = true);
+          return;
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _onboardingDone = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_onboardingDone == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!_onboardingDone!) {
+      return OnboardingFlow(
+        onComplete: () => setState(() => _onboardingDone = true),
+      );
+    }
+    return const MainScreen();
   }
 }
 
@@ -126,8 +139,9 @@ class _MainScreenState extends State<MainScreen> {
 
   final screens = const [
     DashboardScreen(),
-    WorkoutsHubScreen(),
-    ProfileScreen(),
+    ScanTabScreen(),
+    BodyScreen(),
+    WorkoutGeneratorScreen(embedded: true),
   ];
 
   @override
@@ -146,117 +160,92 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final navItems = [
-      (Icons.home_outlined, Icons.home, 'Dashboard'),
-      (Icons.fitness_center_outlined, Icons.fitness_center, 'Workouts'),
-      (Icons.person_outline, Icons.person, 'Profile'),
+      (Icons.home_outlined, Icons.home_rounded, 'TODAY'),
+      (Icons.center_focus_weak_rounded, Icons.center_focus_strong_rounded, 'SCAN'),
+      (Icons.person_outline_rounded, Icons.person_rounded, 'BODY'),
+      (Icons.fitness_center_outlined, Icons.fitness_center_rounded, 'TRAIN'),
     ];
 
     return Scaffold(
-      extendBody: true, // Scroll content behind bottom navigation bar
+      extendBody: true,
       body: screens[currentIndex],
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Container(
-            height: 68,
-            decoration: BoxDecoration(
-              color: AppColors.background.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    final itemWidth = width / 3;
-                    return Stack(
-                      children: [
-                        // Animated sliding pill background
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeOutBack, // slight overshoot for physical premium feel
-                          left: currentIndex * itemWidth,
-                          top: 8,
-                          bottom: 8,
-                          width: itemWidth,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.accent.withValues(alpha: 0.16),
-                                  AppColors.accent.withValues(alpha: 0.04),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(22),
-                              border: Border.all(
-                                color: AppColors.accent.withValues(alpha: 0.25),
-                                width: 1.0,
-                              ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 64,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = constraints.maxWidth / navItems.length;
+                return Stack(
+                  children: [
+                    // Active indicator — thin blue bar under the selected tab
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut,
+                      left: currentIndex * itemWidth + itemWidth / 2 - 14,
+                      top: 0,
+                      width: 28,
+                      child: Container(
+                        height: 3,
+                        decoration: const BoxDecoration(
+                          color: kBlue,
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(2),
+                          ),
+                          boxShadow: [
+                            BoxShadow(color: kBlue, blurRadius: 8),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: List.generate(navItems.length, (index) {
+                        final item = navItems[index];
+                        final isSelected = index == currentIndex;
+                        final color =
+                            isSelected ? kBlue : AppColors.textMuted;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              // Refresh dashboard when switching back to it
+                              if (index == 0 && currentIndex != 0) {
+                                triggerDashboardRefresh();
+                              }
+                              setState(() => currentIndex = index);
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  isSelected ? item.$2 : item.$1,
+                                  color: color,
+                                  size: 24,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item.$3,
+                                  style: TextStyle(
+                                    color: color,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                        
-                        // Tab items
-                        Row(
-                          children: List.generate(navItems.length, (index) {
-                            final item = navItems[index];
-                            final isSelected = index == currentIndex;
-                            return Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() => currentIndex = index),
-                                behavior: HitTestBehavior.opaque,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      child: Icon(
-                                        isSelected ? item.$2 : item.$1,
-                                        color: isSelected
-                                            ? AppColors.accent
-                                            : AppColors.textSecondary,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      item.$3,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: isSelected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                        color: isSelected
-                                            ? AppColors.accent
-                                            : AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
+                        );
+                      }),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),

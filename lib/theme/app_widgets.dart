@@ -2,6 +2,123 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
+// ── Shimmer loading box ───────────────────────────────────────────────────────
+class ShimmerBox extends StatefulWidget {
+  const ShimmerBox({
+    super.key,
+    required this.width,
+    required this.height,
+    this.borderRadius = 12,
+  });
+
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  @override
+  State<ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+    _anim = Tween<double>(
+      begin: -2,
+      end: 2,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          gradient: LinearGradient(
+            begin: Alignment(_anim.value - 1, 0),
+            end: Alignment(_anim.value + 1, 0),
+            colors: [
+              AppColors.surface,
+              AppColors.surfaceElevated,
+              AppColors.surface,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Pressable card (scale 0.97 on tap down) ───────────────────────────────────
+class PressableCard extends StatefulWidget {
+  const PressableCard({super.key, required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<PressableCard> createState() => _PressableCardState();
+}
+
+class _PressableCardState extends State<PressableCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+      lowerBound: 0.97,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _ctrl.reverse(),
+      onTapUp: (_) {
+        _ctrl.forward();
+        widget.onTap?.call();
+      },
+      onTapCancel: () => _ctrl.forward(),
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) =>
+            Transform.scale(scale: _ctrl.value, child: child),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -24,14 +141,15 @@ class AppCard extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         color: color ?? AppColors.surface,
-        gradient: gradient ?? (color == null ? LinearGradient(
-          colors: [
-            AppColors.surface,
-            AppColors.background,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ) : null),
+        gradient:
+            gradient ??
+            (color == null
+                ? LinearGradient(
+                    colors: [AppColors.surface, AppColors.background],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
@@ -42,9 +160,9 @@ class AppCard extends StatelessWidget {
 
 TextStyle secondaryTextStyle(BuildContext context, {double? fontSize}) {
   return Theme.of(context).textTheme.bodySmall!.copyWith(
-        color: AppColors.textSecondary,
-        fontSize: fontSize,
-      );
+    color: AppColors.textSecondary,
+    fontSize: fontSize,
+  );
 }
 
 class AppWarningCard extends StatelessWidget {
@@ -60,9 +178,13 @@ class AppWarningCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: AppColors.warningText)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.warningText,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(body, style: const TextStyle(color: AppColors.warningText)),
         ],
@@ -143,7 +265,9 @@ class OnboardingScaffold extends StatelessWidget {
                     value: currentStep! / totalSteps!,
                     minHeight: 4,
                     backgroundColor: AppColors.border,
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.accent,
+                    ),
                   ),
                 ),
               ),
@@ -172,7 +296,7 @@ class OnboardingScaffold extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -182,9 +306,13 @@ class OnboardingScaffold extends StatelessWidget {
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 8),
-                    Text(subtitle!,
-                        style: const TextStyle(
-                            fontSize: 15, color: AppColors.textSecondary)),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -197,7 +325,8 @@ class OnboardingScaffold extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              child: bottom ??
+              child:
+                  bottom ??
                   (onContinue != null
                       ? ContinueButton(
                           onPressed: continueEnabled ? onContinue : null,
@@ -240,8 +369,8 @@ class SelectionTile extends StatelessWidget {
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: selected 
-              ? activeColor.withValues(alpha: 0.08) 
+          color: selected
+              ? activeColor.withValues(alpha: 0.08)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -254,7 +383,7 @@ class SelectionTile extends StatelessWidget {
                     color: activeColor.withValues(alpha: 0.12),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ]
               : [],
         ),
@@ -284,7 +413,9 @@ class SelectionTile extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: selected ? activeColor : AppColors.textPrimary,
+                            color: selected
+                                ? activeColor
+                                : AppColors.textPrimary,
                           ),
                         ),
                         if (subtitle != null) ...[
@@ -303,11 +434,7 @@ class SelectionTile extends StatelessWidget {
                     ),
                   ),
                   if (selected)
-                    Icon(
-                      Icons.check_circle,
-                      color: activeColor,
-                      size: 22,
-                    )
+                    Icon(Icons.check_circle, color: activeColor, size: 22)
                   else
                     Container(
                       width: 22,
@@ -353,10 +480,11 @@ class PillSelector<T> extends StatelessWidget {
           onTap: () => onSelected(option),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.accent.withValues(alpha: 0.12) : AppColors.surface,
+              color: isSelected
+                  ? AppColors.accent.withValues(alpha: 0.12)
+                  : AppColors.surface,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: isSelected ? AppColors.accent : AppColors.border,
@@ -368,7 +496,7 @@ class PillSelector<T> extends StatelessWidget {
                         color: AppColors.accent.withValues(alpha: 0.08),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
-                      )
+                      ),
                     ]
                   : [],
             ),
@@ -414,23 +542,28 @@ class ActivityRing extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label.toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textMuted,
-                      letterSpacing: 1)),
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                  letterSpacing: 1,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
                 '${current.toInt()}/${goal.toInt()}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
                 ),
               ),
-              const Text('CAL',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              Text(
+                'CAL',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
             ],
           ),
         ),
@@ -475,7 +608,7 @@ class _RingPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     canvas.drawCircle(center, radius, track);
-    
+
     if (progress > 0) {
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
@@ -527,14 +660,13 @@ class MiniBarChart extends StatelessWidget {
                 height: h.clamp(4.0, height),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      barColor,
-                      barColor.withValues(alpha: 0.2),
-                    ],
+                    colors: [barColor, barColor.withValues(alpha: 0.2)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(4),
+                  ),
                 ),
               ),
             ),
@@ -575,9 +707,13 @@ class StatCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 const Spacer(),
                 if (icon != null)
                   Icon(icon, size: 18, color: AppColors.textMuted),
@@ -590,7 +726,7 @@ class StatCard extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -599,9 +735,13 @@ class StatCard extends StatelessWidget {
                 ),
                 if (unit != null) ...[
                   const SizedBox(width: 4),
-                  Text(unit!,
-                      style: const TextStyle(
-                          fontSize: 14, color: AppColors.textSecondary)),
+                  Text(
+                    unit!,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -636,7 +776,7 @@ class SocialAuthButton extends StatelessWidget {
         label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: AppColors.border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -781,7 +921,7 @@ class _FeatureHubTileState extends State<FeatureHubTile>
                             const SizedBox(height: 2),
                             Text(
                               widget.subtitle,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 color: AppColors.textSecondary,
                               ),
@@ -789,7 +929,7 @@ class _FeatureHubTileState extends State<FeatureHubTile>
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                      Icon(Icons.chevron_right, color: AppColors.textMuted),
                     ],
                   ),
                 ),

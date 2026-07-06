@@ -7,10 +7,7 @@ const String baseUrl = 'https://fitness-app-xayv.onrender.com';
 Map<String, String> getHeaders() {
   final session = Supabase.instance.client.auth.currentSession;
   final token = session?.accessToken ?? '';
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $token',
-  };
+  return {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'};
 }
 
 String? getCurrentUserId() {
@@ -77,13 +74,141 @@ Future<Map<String, dynamic>?> getDashboard() async {
   }
 }
 
-Future<bool> logBodyweight(double weightKg) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/bodyweight/log'),
-    headers: getHeaders(),
-    body: jsonEncode({'weight_kg': weightKg}),
-  );
-  return response.statusCode == 200;
+Future<List<String>> getUserExercises() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return [];
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/users/$userId/exercises'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return (data['exercises'] as List).cast<String>();
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
+
+Future<Map<String, dynamic>?> getExerciseStats(String exercise) async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
+  try {
+    final encoded = Uri.encodeComponent(exercise);
+    final response = await http.get(
+      Uri.parse('$baseUrl/users/$userId/exercises/$encoded/stats'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> getStreak() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/streak/$userId'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> logBodyweight(double weightKg) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/bodyweight/log'),
+      headers: getHeaders(),
+      body: jsonEncode({'weight_kg': weightKg}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return {'error': 'Server error (${response.statusCode})'};
+  } catch (e) {
+    return {'error': 'Network error'};
+  }
+}
+
+Future<Map<String, dynamic>?> getTodayBodyweight() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/bodyweight/today/$userId'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> getMuscleBalance() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/muscle-balance/$userId'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> scanFoodText(String description) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/calories/scan/text'),
+      headers: getHeaders(),
+      body: jsonEncode({'description': description}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+Future<String?> getAiSummary() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/ai-summary/$userId'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return (jsonDecode(response.body) as Map<String, dynamic>)['summary']
+          as String?;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
 }
 
 int parseReps(dynamic reps) {

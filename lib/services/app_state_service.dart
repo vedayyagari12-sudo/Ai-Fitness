@@ -5,7 +5,7 @@ import '../models/onboarding_data.dart';
 class AppStateService {
   static const _onboardingCompleteKey = 'onboarding_complete';
   static const _onboardingDataKey = 'onboarding_data';
-  static const _paywallSeenKey = 'paywall_seen';
+  static const _seenMilestonesKey = 'seen_milestones';
 
   static bool _guestMode = false;
   static bool get isGuestMode => _guestMode;
@@ -20,6 +20,12 @@ class AppStateService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardingCompleteKey, true);
     await prefs.setString(_onboardingDataKey, jsonEncode(data.toJson()));
+  }
+
+  // Sets the completion flag only — used when profile found in Supabase on reinstall.
+  static Future<void> markOnboardingComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingCompleteKey, true);
   }
 
   static Future<OnboardingData?> getOnboardingData() async {
@@ -38,16 +44,23 @@ class AppStateService {
       ..hearAboutSource = map['hear_about_source'] as String?
       ..triedOtherApps = map['tried_other_apps'] as bool?
       ..fitnessLevel = map['fitness_level'] as String?
-      ..initialPhysiqueImagePath = map['initial_physique_image_path'] as String?;
+      ..initialPhysiqueImagePath =
+          map['initial_physique_image_path'] as String?;
   }
 
-  static Future<bool> hasSeenPaywall() async {
+  static Future<Set<int>> getSeenMilestones() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_paywallSeenKey) ?? false;
+    final list = prefs.getStringList(_seenMilestonesKey) ?? [];
+    return list.map(int.parse).toSet();
   }
 
-  static Future<void> markPaywallSeen() async {
+  static Future<void> markMilestoneSeen(int milestone) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_paywallSeenKey, true);
+    final seen = await getSeenMilestones();
+    seen.add(milestone);
+    await prefs.setStringList(
+      _seenMilestonesKey,
+      seen.map((e) => e.toString()).toList(),
+    );
   }
 }
