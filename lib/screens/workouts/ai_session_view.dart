@@ -6,30 +6,19 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'api_service.dart';
-import 'theme/app_theme.dart';
-import 'theme/app_widgets.dart';
-import 'workout_history_screen.dart';
-import 'utils/snackbar.dart';
+import '../../api_service.dart';
+import '../../screens/today_screen.dart' show triggerTodayRefresh;
+import '../../theme/app_theme.dart';
+import '../../theme/app_widgets.dart';
+import '../../utils/snackbar.dart';
 
-const String generatorBaseUrl = 'https://fitness-app-xayv.onrender.com';
-
-// Session accent palette (screenshot-accurate).
-const Color _yellow = Color(0xFFFFD23F); // est. load
-const Color _pink = Color(0xFFFF3B79); // focus / pump
-const Color _green = Color(0xFFB8F94B); // hypertrophy
-
-/// AI-generated training session — the ONLY way to start a workout.
-/// No manual goal/equipment/focus/duration selection: the plan is built
-/// automatically from the user's profile and physique scan.
-class WorkoutGeneratorScreen extends StatefulWidget {
-  const WorkoutGeneratorScreen({super.key, this.embedded = false});
-
-  /// When shown as the TRAIN tab there is no back button / app bar.
-  final bool embedded;
+/// AI-generated training session — the TODAY sub-tab of TRAIN.
+/// The plan is built automatically from the user's profile and physique scan.
+class AiSessionView extends StatefulWidget {
+  const AiSessionView({super.key});
 
   @override
-  State<WorkoutGeneratorScreen> createState() => _WorkoutGeneratorScreenState();
+  State<AiSessionView> createState() => _AiSessionViewState();
 }
 
 class _GeneratedExercise {
@@ -51,7 +40,8 @@ class _GeneratedExercise {
   bool checked = false;
 }
 
-class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
+class _AiSessionViewState extends State<AiSessionView>
+    with AutomaticKeepAliveClientMixin {
   Map<String, dynamic>? workout;
   List<_GeneratedExercise> mainExercises = [];
   Set<String> _lagging = {}; // canonical lagging muscle groups
@@ -59,6 +49,9 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
   bool isSaving = false;
   bool _started = false; // true once the user has begun ticking off exercises
   String error = '';
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -109,7 +102,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
       final token =
           Supabase.instance.client.auth.currentSession?.accessToken ?? '';
       final response = await http.post(
-        Uri.parse('$generatorBaseUrl/workouts/generate'),
+        Uri.parse('$baseUrl/workouts/generate'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -195,6 +188,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
       HapticFeedback.heavyImpact();
       final n = done.length;
       setState(() => _started = false);
+      triggerTodayRefresh();
       AppSnackbar.success(
         context,
         '$n exercise${n == 1 ? '' : 's'} logged — nice work 💪',
@@ -259,6 +253,8 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
   }
 
   String get _whyText {
+    final fromBackend = (workout?['why_this_session'] as String?)?.trim();
+    if (fromBackend != null && fromBackend.isNotEmpty) return fromBackend;
     if (_lagging.isEmpty) {
       return 'Built from your goals and recent training so every muscle '
           'gets balanced volume across the week.';
@@ -274,17 +270,14 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
   // ── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: _generate,
-          color: kBlue,
-          child: isLoading
-              ? _loadingState()
-              : (workout == null ? _errorState() : _sessionView()),
-        ),
-      ),
+    super.build(context);
+    return RefreshIndicator(
+      onRefresh: _generate,
+      color: kCyan,
+      backgroundColor: kBgCard,
+      child: isLoading
+          ? _loadingState()
+          : (workout == null ? _errorState() : _sessionView()),
     );
   }
 
@@ -364,7 +357,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
             child: _statBox('EXERCISES', '${mainExercises.length}', '', null),
           ),
           const SizedBox(width: 10),
-          Expanded(child: _statBox('EST. LOAD', '$_estLoad', '', _yellow)),
+          Expanded(child: _statBox('EST. LOAD', '$_estLoad', '', kGold)),
         ],
       ),
       const SizedBox(height: 16),
@@ -400,56 +393,20 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
   }
 
   Widget _header(String focus, String? name) {
-    final canPop = !widget.embedded && Navigator.of(context).canPop();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (canPop) ...[
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 18,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
-            Expanded(
-              child: Text(
-                "TODAY'S SESSION · ${focus.toUpperCase()}",
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.4,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const WorkoutHistoryScreen(),
-                ),
-              ),
-              child: Icon(
-                Icons.history_rounded,
-                size: 20,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
+        Text(
+          "TODAY'S SESSION · ${focus.toUpperCase()}",
+          style: kLabelSmall,
         ),
         const SizedBox(height: 8),
         Text(
           name?.isNotEmpty == true ? name! : '$focus Session',
           style: TextStyle(
             color: AppColors.textPrimary,
-            fontSize: 30,
-            fontWeight: FontWeight.w900,
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
             letterSpacing: -0.8,
             height: 1.05,
           ),
@@ -462,9 +419,9 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceElevated,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,25 +472,25 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kCyan.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: kCyan.withValues(alpha: 0.35)),
+        color: kCyan.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border(
+          left: BorderSide(color: kCyan, width: 3),
+          top: BorderSide(color: kCyan.withValues(alpha: 0.2)),
+          right: BorderSide(color: kCyan.withValues(alpha: 0.2)),
+          bottom: BorderSide(color: kCyan.withValues(alpha: 0.2)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome_rounded, size: 14, color: kCyan),
+              const Icon(Icons.auto_awesome_rounded, size: 14, color: kCyan),
               const SizedBox(width: 6),
               Text(
                 'WHY THIS SESSION',
-                style: TextStyle(
-                  color: kCyan,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
+                style: kLabelSmall.copyWith(color: kCyan),
               ),
             ],
           ),
@@ -552,15 +509,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
     );
   }
 
-  Widget _label(String t) => Text(
-    t,
-    style: TextStyle(
-      color: AppColors.textMuted,
-      fontSize: 11,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 1.5,
-    ),
-  );
+  Widget _label(String t) => Text(t, style: kLabelSmall);
 
   List<Widget> _planRows() {
     return List.generate(mainExercises.length, (i) {
@@ -570,11 +519,11 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
 
       final Color borderColor;
       if (done) {
-        borderColor = kBlue.withValues(alpha: 0.6);
+        borderColor = kCyan.withValues(alpha: 0.6);
       } else if (focus) {
-        borderColor = _pink.withValues(alpha: 0.45);
+        borderColor = kPink.withValues(alpha: 0.45);
       } else {
-        borderColor = Colors.white.withValues(alpha: 0.05);
+        borderColor = AppColors.border;
       }
 
       return GestureDetector(
@@ -585,7 +534,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
           margin: const EdgeInsets.only(top: 6),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: done ? kBlue.withValues(alpha: 0.08) : AppColors.surface,
+            color: done ? kCyan.withValues(alpha: 0.07) : AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor),
           ),
@@ -619,8 +568,8 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: AppColors.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                               decoration: done
                                   ? TextDecoration.lineThrough
                                   : null,
@@ -653,9 +602,9 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
               Text(
                 '${e.sets} × ${e.repsRaw}',
                 style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -666,20 +615,25 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
   }
 
   Widget _checkDot(bool done) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        color: done ? kBlue : Colors.transparent,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: done ? kBlue : AppColors.textMuted,
-          width: 2,
+    return AnimatedScale(
+      scale: done ? 1.0 : 0.92,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutBack,
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: done ? kCyan : Colors.transparent,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: done ? kCyan : AppColors.textMuted,
+            width: 2,
+          ),
         ),
+        child: done
+            ? const Icon(Icons.check_rounded, size: 14, color: Colors.black)
+            : null,
       ),
-      child: done
-          ? const Icon(Icons.check_rounded, size: 14, color: Colors.black)
-          : null,
     );
   }
 
@@ -687,13 +641,13 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: _pink.withValues(alpha: 0.15),
+        color: kPink.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
+      child: const Text(
         'FOCUS',
         style: TextStyle(
-          color: _pink,
+          color: kPink,
           fontSize: 9,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.6,
@@ -709,7 +663,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -720,9 +674,21 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
             borderRadius: BorderRadius.circular(6),
             child: Row(
               children: [
-                if (s > 0) Expanded(flex: s, child: Container(height: 10, color: kBlue)),
-                if (h > 0) Expanded(flex: h, child: Container(height: 10, color: _green)),
-                if (p > 0) Expanded(flex: p, child: Container(height: 10, color: _pink)),
+                if (s > 0)
+                  Expanded(
+                    flex: s,
+                    child: Container(height: 10, color: kBlue),
+                  ),
+                if (h > 0)
+                  Expanded(
+                    flex: h,
+                    child: Container(height: 10, color: kGold),
+                  ),
+                if (p > 0)
+                  Expanded(
+                    flex: p,
+                    child: Container(height: 10, color: kPink),
+                  ),
               ],
             ),
           ),
@@ -731,9 +697,9 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
             children: [
               _mixLegend(kBlue, 'Strength', s),
               const Spacer(),
-              _mixLegend(_green, 'Hypertrophy', h),
+              _mixLegend(kGold, 'Hypertrophy', h),
               const Spacer(),
-              _mixLegend(_pink, 'Pump', p),
+              _mixLegend(kPink, 'Pump', p),
             ],
           ),
         ],
@@ -789,8 +755,8 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
               _completedCount == mainExercises.length
                   ? 'Clear all'
                   : 'Select all',
-              style: TextStyle(
-                color: kBlue,
+              style: const TextStyle(
+                color: kCyan,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
@@ -822,13 +788,13 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
                       ? _beginSession
                       : (finishReady ? _finishSession : null)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: kBlue,
+              backgroundColor: kCyan,
               foregroundColor: Colors.black,
               disabledBackgroundColor: AppColors.surfaceElevated,
               disabledForegroundColor: AppColors.textMuted,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
             child: isSaving
@@ -854,7 +820,7 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
                         label,
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -875,6 +841,24 @@ class _WorkoutGeneratorScreenState extends State<WorkoutGeneratorScreen> {
                   color: AppColors.textMuted,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (!_started && !isLoading) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _generate,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'Generate different session →',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'api_service.dart';
 import 'theme/app_theme.dart';
+import 'utils/snackbar.dart';
 
 class WorkoutHistoryScreen extends StatefulWidget {
   const WorkoutHistoryScreen({super.key, this.embedded = false});
@@ -32,74 +33,251 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
     });
   }
 
+  /// Group workouts by calendar day, newest day first.
+  List<(String, List<dynamic>)> get _grouped {
+    final map = <String, List<dynamic>>{};
+    for (final w in workouts) {
+      final raw = (w['created_at'] as String?) ?? '';
+      final key = raw.length >= 10 ? raw.substring(0, 10) : 'Earlier';
+      map.putIfAbsent(key, () => []).add(w);
+    }
+    final keys = map.keys.toList()..sort((a, b) => b.compareTo(a));
+    return [for (final k in keys) (_dateLabel(k), map[k]!)];
+  }
+
+  String _dateLabel(String iso) {
+    final d = DateTime.tryParse(iso);
+    if (d == null) return iso.toUpperCase();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    if (day == today) return 'TODAY';
+    if (day == today.subtract(const Duration(days: 1))) return 'YESTERDAY';
+    const months = [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    ];
+    return '${months[d.month - 1]} ${d.day}${d.year != now.year ? ' ${d.year}' : ''}';
+  }
+
+  Future<bool> _confirmDelete(dynamic w) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Delete "${w['exercise']}"?',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This removes the workout from your history permanently.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return false;
+
+    final id = (w['id'] as num?)?.toInt();
+    if (id == null) return false;
+    final ok = await deleteWorkout(id);
+    if (!mounted) return false;
+    if (ok) {
+      AppSnackbar.success(context, 'Workout deleted');
+      return true;
+    }
+    AppSnackbar.error(context, 'Could not delete — try again');
+    return false;
+  }
+
+  Future<void> _openEditSheet(dynamic w) async {
+    final exerciseCtrl = TextEditingController(text: '${w['exercise'] ?? ''}');
+    final setsCtrl = TextEditingController(text: '${w['sets'] ?? ''}');
+    final repsCtrl = TextEditingController(text: '${w['reps'] ?? ''}');
+    final weightCtrl = TextEditingController(text: '${w['weight'] ?? ''}');
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          24 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('EDIT WORKOUT', style: kLabelSmall),
+            const SizedBox(height: 16),
+            TextField(
+              controller: exerciseCtrl,
+              decoration: const InputDecoration(labelText: 'Exercise'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: setsCtrl,
+                    decoration: const InputDecoration(labelText: 'Sets'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: repsCtrl,
+                    decoration: const InputDecoration(labelText: 'Reps'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: weightCtrl,
+                    decoration: const InputDecoration(labelText: 'Weight'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true || !mounted) return;
+    final id = (w['id'] as num?)?.toInt();
+    if (id == null) return;
+    final ok = await updateWorkout(id, {
+      'exercise': exerciseCtrl.text.trim(),
+      'sets': int.tryParse(setsCtrl.text),
+      'reps': int.tryParse(repsCtrl.text),
+      'weight': double.tryParse(weightCtrl.text),
+    });
+    if (!mounted) return;
+    if (ok) {
+      AppSnackbar.success(context, 'Workout updated');
+      loadWorkouts();
+    } else {
+      AppSnackbar.error(context, 'Could not update — try again');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: widget.embedded
           ? null
-          : AppBar(
-              title: const Text('Workout History'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  onPressed: () async {
-                    await Supabase.instance.client.auth.signOut();
-                  },
-                ),
-              ],
-            ),
+          : AppBar(title: const Text('Workout History')),
       body: RefreshIndicator(
         onRefresh: loadWorkouts,
-        color: AppColors.accent,
+        color: kLime,
         backgroundColor: AppColors.surface,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : workouts.isEmpty
             ? _emptyState()
-            : ListView.separated(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  widget.embedded ? 8 : 20,
-                  20,
-                  120,
-                ),
-                itemCount: workouts.length + 1,
-                separatorBuilder: (_, i) => i == 0
-                    ? const SizedBox.shrink()
-                    : Divider(height: 1, color: AppColors.divider),
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Text(
-                            'HISTORY',
-                            style: TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${workouts.length} ${workouts.length == 1 ? 'entry' : 'entries'}',
-                            style: TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return _workoutRow(workouts[index - 1]);
-                },
-              ),
+            : _historyList(),
       ),
+    );
+  }
+
+  Widget _historyList() {
+    final groups = _grouped;
+    final rows = <Widget>[];
+    for (final (label, items) in groups) {
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 18, bottom: 6),
+          child: Text(label, style: kLabelSmall),
+        ),
+      );
+      for (var i = 0; i < items.length; i++) {
+        rows.add(_dismissibleRow(items[i]));
+        if (i != items.length - 1) {
+          rows.add(Divider(height: 1, color: AppColors.divider));
+        }
+      }
+    }
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(20, widget.embedded ? 0 : 12, 20, 120),
+      children: rows,
+    );
+  }
+
+  Widget _dismissibleRow(dynamic w) {
+    return Dismissible(
+      key: ValueKey('workout_${w['id']}'),
+      background: Container(
+        // Swipe right → edit
+        color: AppColors.surfaceElevated,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: Icon(Icons.edit_outlined, color: AppColors.accentCyan),
+      ),
+      secondaryBackground: Container(
+        // Swipe left → delete
+        color: AppColors.danger.withValues(alpha: 0.85),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          _openEditSheet(w);
+          return false;
+        }
+        return _confirmDelete(w);
+      },
+      onDismissed: (_) {
+        setState(() => workouts.removeWhere((x) => x['id'] == w['id']));
+      },
+      child: _workoutRow(w),
     );
   }
 
@@ -112,7 +290,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
     final detail = <String>[];
     if (sets != null && reps != null) detail.add('$sets × $reps');
-    if (weight != null) detail.add('@ $weight lb');
+    if (weight != null) detail.add('@ $weight kg');
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -136,7 +314,10 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                   const SizedBox(height: 3),
                   Text(
                     detail.join('   '),
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ],
@@ -149,7 +330,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                 Text(
                   (vol as num).toStringAsFixed(0),
                   style: const TextStyle(
-                    color: AppColors.accent,
+                    color: AppColors.accentCyan,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.5,
@@ -195,7 +376,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
         const SizedBox(height: 6),
         Center(
           child: Text(
-            'Log your first set in the LOG tab',
+            'Log your first set in the LOG tab →',
             style: TextStyle(color: AppColors.textMuted, fontSize: 13),
           ),
         ),

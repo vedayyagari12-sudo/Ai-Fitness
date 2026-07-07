@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
-import 'dashboard_screen.dart' show DashboardScreen, triggerDashboardRefresh;
+import 'screens/today_screen.dart';
 import 'login_screen.dart';
-import 'screens/onboarding/onboarding_flow.dart';
+import 'screens/onboarding/goal_picker_screen.dart';
 import 'screens/body/body_screen.dart';
 import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
+import 'services/nav_service.dart';
 import 'theme/app_theme.dart';
-import 'theme/theme_controller.dart';
-import 'workout_generator_screen.dart';
+import 'screens/workouts/workouts_tab_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await ThemeController.load();
   await Supabase.initialize(
     url: 'https://jfopizywtgaqhkbkjlyz.supabase.co',
     anonKey:
@@ -27,24 +26,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeController.mode,
-      builder: (_, mode, _) {
-        final platformB =
-            WidgetsBinding.instance.platformDispatcher.platformBrightness;
-        AppColors.brightness = switch (mode) {
-          ThemeMode.light => Brightness.light,
-          ThemeMode.dark => Brightness.dark,
-          ThemeMode.system => platformB,
-        };
-        return MaterialApp(
-          title: 'FitAI',
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: mode,
-          home: const AppBootstrap(),
-        );
-      },
+    // Dark-only: the design system is built for a near-black canvas.
+    AppColors.brightness = Brightness.dark;
+    return MaterialApp(
+      title: 'FitAI',
+      theme: AppTheme.darkTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
+      home: const AppBootstrap(),
     );
   }
 }
@@ -119,7 +108,7 @@ class _OnboardingGateState extends State<_OnboardingGate> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (!_onboardingDone!) {
-      return OnboardingFlow(
+      return GoalPickerScreen(
         onComplete: () => setState(() => _onboardingDone = true),
       );
     }
@@ -138,16 +127,31 @@ class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
 
   final screens = const [
-    DashboardScreen(),
+    TodayScreen(),
     ScanTabScreen(),
     BodyScreen(),
-    WorkoutGeneratorScreen(embedded: true),
+    WorkoutsTabScreen(),
   ];
 
   @override
   void initState() {
     super.initState();
     _syncOnboardingProfile();
+    mainTabIndex.addListener(_onTabRequest);
+  }
+
+  @override
+  void dispose() {
+    mainTabIndex.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  void _onTabRequest() {
+    final index = mainTabIndex.value;
+    if (index != currentIndex && mounted) {
+      if (index == 0) triggerTodayRefresh();
+      setState(() => currentIndex = index);
+    }
   }
 
   Future<void> _syncOnboardingProfile() async {
@@ -157,6 +161,10 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  // Each tab owns an accent colour (matches the reference design):
+  // TODAY lime · SCAN blue · BODY pink · TRAIN cyan.
+  static const tabAccents = [kLime, kBlue, kPink, kCyan];
+
   @override
   Widget build(BuildContext context) {
     final navItems = [
@@ -165,6 +173,7 @@ class _MainScreenState extends State<MainScreen> {
       (Icons.person_outline_rounded, Icons.person_rounded, 'BODY'),
       (Icons.fitness_center_outlined, Icons.fitness_center_rounded, 'TRAIN'),
     ];
+    final accent = tabAccents[currentIndex];
 
     return Scaffold(
       extendBody: true,
@@ -183,7 +192,7 @@ class _MainScreenState extends State<MainScreen> {
                 final itemWidth = constraints.maxWidth / navItems.length;
                 return Stack(
                   children: [
-                    // Active indicator — thin blue bar under the selected tab
+                    // Active indicator — thin accent bar under the selected tab
                     AnimatedPositioned(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOut,
@@ -192,13 +201,13 @@ class _MainScreenState extends State<MainScreen> {
                       width: 28,
                       child: Container(
                         height: 3,
-                        decoration: const BoxDecoration(
-                          color: kBlue,
-                          borderRadius: BorderRadius.vertical(
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: const BorderRadius.vertical(
                             bottom: Radius.circular(2),
                           ),
                           boxShadow: [
-                            BoxShadow(color: kBlue, blurRadius: 8),
+                            BoxShadow(color: accent, blurRadius: 8),
                           ],
                         ),
                       ),
@@ -208,14 +217,15 @@ class _MainScreenState extends State<MainScreen> {
                         final item = navItems[index];
                         final isSelected = index == currentIndex;
                         final color =
-                            isSelected ? kBlue : AppColors.textMuted;
+                            isSelected ? accent : AppColors.textMuted;
                         return Expanded(
                           child: GestureDetector(
                             onTap: () {
                               // Refresh dashboard when switching back to it
                               if (index == 0 && currentIndex != 0) {
-                                triggerDashboardRefresh();
+                                triggerTodayRefresh();
                               }
+                              mainTabIndex.value = index;
                               setState(() => currentIndex = index);
                             },
                             behavior: HitTestBehavior.opaque,

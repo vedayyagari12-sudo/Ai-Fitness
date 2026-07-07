@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../log_workout_screen.dart';
 import '../../workout_history_screen.dart';
-import '../../exercise_stats_screen.dart';
 import '../../theme/app_theme.dart';
+import 'ai_session_view.dart';
 import 'segmented_bar.dart';
 
-/// Workouts tab — LOG / HISTORY segments (The Outsiders style).
+/// TRAIN tab — TODAY (AI session) / LOG / HISTORY segments.
 class WorkoutsTabScreen extends StatefulWidget {
   const WorkoutsTabScreen({super.key});
 
@@ -26,35 +26,19 @@ class _WorkoutsTabScreenState extends State<WorkoutsTabScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-              child: Row(
-                children: [
-                  Text(
-                    'WORKOUTS',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2.0,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ExerciseStatsScreen(),
-                      ),
-                    ),
-                    icon: const Icon(Icons.query_stats, size: 20),
-                    color: AppColors.textSecondary,
-                    tooltip: 'Exercise stats',
-                  ),
-                ],
+              child: Text(
+                'TRAIN',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.0,
+                ),
               ),
             ),
             const SizedBox(height: 8),
             SegmentedBar(
-              labels: const ['LOG', 'HISTORY'],
+              labels: const ['TODAY', 'LOG', 'HISTORY'],
               index: _seg,
               onChanged: (i) => setState(() => _seg = i),
             ),
@@ -63,6 +47,7 @@ class _WorkoutsTabScreenState extends State<WorkoutsTabScreen> {
               child: IndexedStack(
                 index: _seg,
                 children: const [
+                  AiSessionView(),
                   LogWorkoutScreen(embedded: true),
                   WorkoutHistoryScreen(embedded: true),
                 ],

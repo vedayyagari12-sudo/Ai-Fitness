@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../api_service.dart';
 import '../../services/app_state_service.dart';
 import '../../theme/app_theme.dart';
-import '../settings/settings_screen.dart';
+import '../../utils/snackbar.dart';
+
+const _appVersion = '1.0.0';
+const _supportEmail = 'support@aifitness.app';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,7 +18,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  Map<String, dynamic>? _onboarding;
+  Map<String, dynamic> _profile = {};
+  bool _loading = true;
 
   @override
   void initState() {
@@ -21,430 +28,568 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _load() async {
-    final data = await AppStateService.getOnboardingData();
+    final profile = await getUserProfile();
     if (!mounted) return;
-    setState(() => _onboarding = data?.toJson());
+    setState(() {
+      _profile = profile ?? {};
+      _loading = false;
+    });
+  }
+
+  Future<void> _save(String key, dynamic value) async {
+    setState(() => _profile[key] = value);
+    await upsertUserProfile({key: value});
+    if (mounted) AppSnackbar.success(context, 'Saved');
+  }
+
+  // ── Editors ────────────────────────────────────────────────────────────────
+
+  Future<void> _editChoice(
+    String title,
+    String key,
+    List<(String, String)> options, // (label, storedValue)
+  ) async {
+    final current = '${_profile[key] ?? ''}';
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Text(title.toUpperCase(), style: kLabelSmall),
+              ),
+              for (final (label, value) in options)
+                ListTile(
+                  title: Text(
+                    label,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: value == current
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                    ),
+                  ),
+                  trailing: value == current
+                      ? const Icon(Icons.check_rounded, color: kLime, size: 18)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, value),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) await _save(key, picked);
+  }
+
+  Future<void> _editNumber(
+    String title,
+    String key, {
+    bool decimal = false,
+    String? suffix,
+  }) async {
+    final ctrl = TextEditingController(text: '${_profile[key] ?? ''}');
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          24 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title.toUpperCase(), style: kLabelSmall),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType:
+                  TextInputType.numberWithOptions(decimal: decimal),
+              decoration: InputDecoration(suffixText: suffix),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) {
+      final value = decimal
+          ? double.tryParse(ctrl.text)
+          : int.tryParse(ctrl.text);
+      if (value != null) await _save(key, value);
+    }
+  }
+
+  // ── Account actions ────────────────────────────────────────────────────────
+
+  Future<void> _signOut() async {
+    AppStateService.setGuestMode(false);
+    await Supabase.instance.client.auth.signOut();
+    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Delete Account?',
+              style: TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'This will permanently delete:\n\n'
+              '• All workout history\n'
+              '• All calorie logs\n'
+              '• All physique scans\n'
+              '• Your profile and account\n\n'
+              'This action cannot be undone.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                height: 1.6,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete Everything'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final ok = await deleteAccount();
+    if (!mounted) return;
+    if (ok) {
+      AppStateService.setGuestMode(false);
+      await Supabase.instance.client.auth.signOut();
+      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+    } else {
+      AppSnackbar.error(
+        context,
+        'Deletion failed — try again or contact support',
+      );
+    }
+  }
+
+  // ── UI ─────────────────────────────────────────────────────────────────────
+
+  String _display(String key, {String? suffix}) {
+    final v = _profile[key];
+    if (v == null || '$v'.isEmpty) return 'Set';
+    return suffix != null ? '$v $suffix' : '$v';
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final email =
-        user?.email ??
-        (AppStateService.isGuestMode ? 'Guest' : 'Not signed in');
-    final fitnessLevel = _onboarding?['fitness_level'] as String?;
-    final goal = _onboarding?['goal'] as String?;
+    final email = Supabase.instance.client.auth.currentUser?.email ?? '—';
+    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
 
     return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // Header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Row(
-                  children: [
-                    if (Navigator.of(context).canPop()) ...[
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 12, top: 6),
-                          child: Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            size: 22,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                    Text(
-                      'Profile',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.0,
-                        foreground: Paint()
-                          ..shader =
-                              LinearGradient(
-                                colors: [
-                                  AppColors.textPrimary,
-                                  AppColors.textSecondary,
-                                ],
-                              ).createShader(
-                                const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // Profile Card with gradient
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.accent.withValues(alpha: 0.12),
-                            AppColors.surface,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.accent.withValues(alpha: 0.08),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          // Avatar with glow
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.accent.withValues(alpha: 0.3),
-                                  AppColors.accent.withValues(alpha: 0.1),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.accent.withValues(
-                                    alpha: 0.25,
-                                  ),
-                                  blurRadius: 16,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              color: AppColors.accent,
-                              size: 30,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  email,
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accent.withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    fitnessLevel != null
-                                        ? '$fitnessLevel • ${goal ?? 'Fitness'}'
-                                        : 'Complete your profile',
-                                    style: TextStyle(
-                                      color: fitnessLevel != null
-                                          ? AppColors.accent
-                                          : AppColors.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Quick Stats Row
-                    if (_onboarding != null) ...[
-                      Row(
-                        children: [
-                          _buildMiniStat(
-                            icon: Icons.straighten,
-                            value: _onboarding!['height_cm'] != null
-                                ? '${(_onboarding!['height_cm'] as num).toInt()}'
-                                : '--',
-                            label: 'Height (cm)',
-                          ),
-                          const SizedBox(width: 12),
-                          _buildMiniStat(
-                            icon: Icons.monitor_weight_outlined,
-                            value: _onboarding!['weight_kg'] != null
-                                ? '${(_onboarding!['weight_kg'] as num).toInt()}'
-                                : '--',
-                            label: 'Weight (kg)',
-                          ),
-                          const SizedBox(width: 12),
-                          _buildMiniStat(
-                            icon: Icons.cake_outlined,
-                            value: _onboarding!['age'] != null
-                                ? '${_onboarding!['age']}'
-                                : '--',
-                            label: 'Age',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-
-                    // Your Plan Card
-                    if (_onboarding != null) ...[
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [AppColors.surface, AppColors.background],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.fitness_center_outlined,
-                                  size: 18,
-                                  color: AppColors.accent,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Your Plan',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            _planRow('Goal', _onboarding!['goal']),
-                            _planRow('Equipment', _onboarding!['equipment']),
-                            _planRow(
-                              'Frequency',
-                              _onboarding!['workout_frequency'],
-                            ),
-                            _planRow(
-                              'Fitness Level',
-                              _onboarding!['fitness_level'],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Account section
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 4),
-                        child: Text(
-                          'ACCOUNT',
-                          style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                    _accountRow(
-                      icon: Icons.settings_outlined,
-                      label: 'Settings',
-                      sub: 'Privacy, account, legal',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
-                        ),
-                      ),
-                    ),
-                    Divider(height: 1, color: AppColors.divider),
-                    _accountRow(
-                      icon: Icons.logout,
-                      label: 'Sign Out',
-                      color: AppColors.error,
-                      onTap: () async {
-                        AppStateService.setGuestMode(false);
-                        await Supabase.instance.client.auth.signOut();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMiniStat({
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.surface,
-              AppColors.surface.withValues(alpha: 0.5),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 20, color: AppColors.accent),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textMuted,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _accountRow({
-    required IconData icon,
-    required String label,
-    String? sub,
-    required VoidCallback onTap,
-    Color? color,
-  }) {
-    final c = color ?? AppColors.textPrimary;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: c),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 60),
                 children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: c,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                  Row(
+                    children: [
+                      if (Navigator.of(context).canPop())
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Icon(
+                              Icons.arrow_back_ios_new_rounded,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      Text(
+                        'Profile',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.8,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Identity card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            initial,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            email,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (sub != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      sub,
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
-                      ),
+                  const SizedBox(height: 24),
+
+                  Text('YOUR DETAILS', style: kLabelSmall),
+                  const SizedBox(height: 4),
+                  _detailRow(
+                    'Goal',
+                    _goalLabel('${_profile['goal'] ?? ''}'),
+                    () => _editChoice('Main goal', 'goal', const [
+                      ('Build Muscle', 'bulk'),
+                      ('Lose Fat', 'cut'),
+                      ('Stay Fit', 'maintain'),
+                      ('Perform', 'athletic'),
+                    ]),
+                  ),
+                  _detailRow(
+                    'Age',
+                    _display('age'),
+                    () => _editNumber('Age', 'age'),
+                  ),
+                  _detailRow(
+                    'Height',
+                    _display('height_cm', suffix: 'cm'),
+                    () => _editNumber('Height', 'height_cm',
+                        decimal: true, suffix: 'cm'),
+                  ),
+                  _detailRow(
+                    'Weight',
+                    _display('weight_kg', suffix: 'kg'),
+                    () => _editNumber('Weight', 'weight_kg',
+                        decimal: true, suffix: 'kg'),
+                  ),
+                  _detailRow(
+                    'Equipment',
+                    _display('equipment'),
+                    () => _editChoice('Equipment', 'equipment', const [
+                      ('Full Gym', 'Full Gym'),
+                      ('Home — Dumbbells', 'Home — Dumbbells'),
+                      ('Bodyweight Only', 'Bodyweight Only'),
+                    ]),
+                  ),
+                  _detailRow(
+                    'Fitness Level',
+                    _display('fitness_level'),
+                    () => _editChoice('Fitness level', 'fitness_level', const [
+                      ('Beginner', 'Beginner'),
+                      ('Intermediate', 'Intermediate'),
+                      ('Advanced', 'Advanced'),
+                    ]),
+                  ),
+                  _detailRow(
+                    'Weekly Sessions',
+                    _display('workout_frequency'),
+                    () => _editChoice(
+                      'Weekly sessions',
+                      'workout_frequency',
+                      const [('1-2', '1-2'), ('3-5', '3-5'), ('6+', '6+')],
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  Text('APP', style: kLabelSmall),
+                  const SizedBox(height: 4),
+                  _detailRow(
+                    'Privacy Policy',
+                    '',
+                    () => _openLegal(
+                      'Privacy Policy',
+                      'assets/legal/privacy_policy.html',
+                    ),
+                  ),
+                  _detailRow(
+                    'Terms of Service',
+                    '',
+                    () => _openLegal(
+                      'Terms of Service',
+                      'assets/legal/terms_of_service.html',
+                    ),
+                  ),
+                  _detailRow('Contact Support', _supportEmail, () {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: AppColors.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        title: Text(
+                          'Contact Support',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        content: Text(
+                          'For support, data requests, or legal inquiries, '
+                          'email us at:\n\n$_supportEmail',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            height: 1.6,
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  _detailRow('App Version', _appVersion, null),
+                  const SizedBox(height: 24),
+
+                  Text('ACCOUNT', style: kLabelSmall),
+                  const SizedBox(height: 4),
+                  _detailRow('Log Out', '', _signOut,
+                      color: AppColors.textSecondary),
+                  _detailRow('Delete Account', '', _confirmDeleteAccount,
+                      color: AppColors.danger),
+                ],
+              ),
+      ),
+    );
+  }
+
+  String _goalLabel(String stored) => switch (stored) {
+        'bulk' => 'Build Muscle',
+        'cut' => 'Lose Fat',
+        'maintain' => 'Stay Fit',
+        'athletic' => 'Perform',
+        '' => 'Set',
+        _ => stored,
+      };
+
+  Widget _detailRow(
+    String label,
+    String value,
+    VoidCallback? onTap, {
+    Color? color,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppColors.divider, width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: color ?? AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            if (value.isNotEmpty)
+              Text(
+                value,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+            if (onTap != null) ...[
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right,
+                color: AppColors.textMuted,
+                size: 18,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openLegal(String title, String assetPath) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LegalViewerScreen(title: title, assetPath: assetPath),
+      ),
+    );
+  }
+}
+
+// ── In-app legal document viewer ─────────────────────────────────────────────
+class LegalViewerScreen extends StatefulWidget {
+  const LegalViewerScreen({
+    super.key,
+    required this.title,
+    required this.assetPath,
+  });
+  final String title;
+  final String assetPath;
+
+  @override
+  State<LegalViewerScreen> createState() => _LegalViewerScreenState();
+}
+
+class _LegalViewerScreenState extends State<LegalViewerScreen> {
+  String _text = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final raw = await rootBundle.loadString(widget.assetPath);
+    // Strip HTML tags for plain-text rendering
+    final stripped = raw
+        .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '')
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r' {2,}'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&nbsp;', ' ')
+        .trim();
+    if (mounted) setState(() => _text = stripped);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
+            Expanded(
+              child: _text.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 60),
+                      child: SelectableText(
+                        _text,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          height: 1.7,
+                        ),
+                      ),
+                    ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _planRow(String label, dynamic value) {
-    if (value == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '$value',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

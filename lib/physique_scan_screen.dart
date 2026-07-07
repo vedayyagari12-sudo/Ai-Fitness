@@ -1,13 +1,17 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'services/permission_service.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'theme/app_theme.dart';
-import 'theme/app_widgets.dart';
 
-const String physiqueBaseUrl = 'https://fitness-app-xayv.onrender.com';
+import 'api_service.dart';
+import 'services/nav_service.dart';
+import 'services/permission_service.dart';
+import 'theme/app_theme.dart';
+import 'utils/snackbar.dart';
 
 class PhysiqueScanScreen extends StatefulWidget {
   const PhysiqueScanScreen({
@@ -23,24 +27,71 @@ class PhysiqueScanScreen extends StatefulWidget {
   State<PhysiqueScanScreen> createState() => _PhysiqueScanScreenState();
 }
 
+class _PhotoSlot {
+  _PhotoSlot(this.label);
+  final String label; // Front / Back / Side
+  XFile? file;
+  Uint8List? bytes;
+}
+
 class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
   final ImagePicker picker = ImagePicker();
+  final List<_PhotoSlot> _slots = [
+    _PhotoSlot('Front'),
+    _PhotoSlot('Back'),
+    _PhotoSlot('Side'),
+  ];
   Map<String, dynamic>? result;
   bool isLoading = false;
   String message = '';
-  List<XFile> selectedImages = [];
 
   @override
   void initState() {
     super.initState();
     if (widget.initialImagePath != null) {
-      selectedImages = [XFile(widget.initialImagePath!)];
+      final f = XFile(widget.initialImagePath!);
+      _slots[0].file = f;
+      f.readAsBytes().then((b) {
+        if (mounted) setState(() => _slots[0].bytes = b);
+      });
     }
   }
 
-  Future<void> addPhoto(ImageSource source) async {
-    final granted = await PermissionService.requestCameraAndMedia(context);
+  List<_PhotoSlot> get _filled =>
+      _slots.where((s) => s.file != null).toList();
+
+  Future<void> _pickFor(_PhotoSlot slot) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final granted = await (source == ImageSource.camera
+        ? PermissionService.requestCamera(context)
+        : PermissionService.requestGallery(context));
     if (!granted) return;
+
     XFile? image;
     try {
       image = await picker.pickImage(
@@ -50,29 +101,30 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
       );
     } catch (_) {
       if (mounted) {
-        setState(
-          () => message = source == ImageSource.camera
-              ? '❌ Camera unavailable here — try Gallery.'
-              : '❌ Could not open the picker.',
+        AppSnackbar.error(
+          context,
+          source == ImageSource.camera
+              ? 'Camera unavailable here — try Gallery.'
+              : 'Could not open the picker.',
         );
       }
       return;
     }
     if (image == null) return;
+    final bytes = await image.readAsBytes();
+    if (!mounted) return;
     setState(() {
-      selectedImages.add(image!);
+      slotOf(slot).file = image;
+      slotOf(slot).bytes = bytes;
+      message = '';
     });
   }
 
-  void removePhoto(int index) {
-    setState(() {
-      selectedImages.removeAt(index);
-    });
-  }
+  _PhotoSlot slotOf(_PhotoSlot s) => _slots[_slots.indexOf(s)];
 
   Future<void> scanPhysique() async {
-    if (selectedImages.isEmpty) {
-      setState(() => message = '❌ Please add at least one photo');
+    if (_filled.isEmpty) {
+      setState(() => message = 'Add at least one photo first.');
       return;
     }
 
@@ -88,17 +140,17 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$physiqueBaseUrl/physique/scan'),
+        Uri.parse('$baseUrl/physique/scan'),
       );
       request.headers['Authorization'] = 'Bearer $token';
 
-      for (final image in selectedImages) {
-        final imageBytes = await image.readAsBytes();
+      for (final slot in _filled) {
+        final imageBytes = slot.bytes ?? await slot.file!.readAsBytes();
         request.files.add(
           http.MultipartFile.fromBytes(
             'files',
             imageBytes,
-            filename: 'physique.jpg',
+            filename: 'physique_${slot.label.toLowerCase()}.jpg',
           ),
         );
       }
@@ -106,90 +158,348 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
+      if (!mounted) return;
       if (response.statusCode == 200) {
         setState(() {
           result = jsonDecode(responseBody);
           message = '';
         });
       } else {
-        setState(() {
-          message = '❌ Could not analyze image. Try again.';
-        });
+        setState(() => message = 'Could not analyze photos — try again.');
       }
     } catch (e) {
-      setState(() {
-        message = '❌ Error: ${e.toString()}';
-      });
+      if (mounted) {
+        setState(() => message = 'Connection lost — check your internet.');
+      }
     }
 
-    setState(() => isLoading = false);
+    if (mounted) setState(() => isLoading = false);
   }
 
-  static final ButtonStyle _scanBtnStyle = OutlinedButton.styleFrom(
-    foregroundColor: AppColors.accent,
-    side: const BorderSide(color: AppColors.accent),
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    textStyle: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.5,
-    ),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  );
+  // ── Derived ────────────────────────────────────────────────────────────────
 
-  Widget scoreBar(String label, int score, int maxScore) {
-    final pct = maxScore > 0 ? (score / maxScore).clamp(0.0, 1.0) : 0.0;
-    final barColor = score < 5
-        ? AppColors.accentSecondary
-        : (score < 7 ? AppColors.accentTertiary : AppColors.accent);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
+  static const _muscleOrder = [
+    'chest', 'back', 'shoulders', 'arms', 'legs', 'core',
+  ];
+
+  List<(String, int, String)> get _muscles {
+    final groups = result?['muscle_groups'] as Map<String, dynamic>? ?? {};
+    return [
+      for (final m in _muscleOrder)
+        if (groups[m] != null)
+          (
+            m,
+            ((groups[m] as Map)['score'] as num?)?.toInt() ?? 0,
+            ((groups[m] as Map)['feedback'] as String?) ?? '',
+          ),
+    ];
+  }
+
+  List<String> get _weakMuscles {
+    final scored = _muscles.toList()..sort((a, b) => a.$2.compareTo(b.$2));
+    return [
+      for (final (name, score, _) in scored)
+        if (score < 7) name,
+    ].take(2).toList();
+  }
+
+  // ── UI ─────────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: widget.embedded
+          ? null
+          : AppBar(title: const Text('Physique Scanner')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (result == null) ...[
+              Text(
+                'Add 1-3 photos for best results',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  for (var i = 0; i < _slots.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 10),
+                    Expanded(child: _slotTile(_slots[i])),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_filled.isNotEmpty)
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : scanPhysique,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kBlue,
+                      foregroundColor: Colors.black,
+                    ),
+                    child: Text(
+                      isLoading ? 'Analyzing...' : 'Analyze Physique',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 16),
+            if (isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Column(
+                    children: [
+                      CircularProgressIndicator(color: kBlue),
+                      SizedBox(height: 12),
+                      Text('Analyzing your physique...'),
+                    ],
                   ),
                 ),
               ),
+            if (message.isNotEmpty && !isLoading)
               Text(
-                '$score',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: barColor,
+                message,
+                style: TextStyle(color: AppColors.error, fontSize: 13),
+              ),
+            if (result != null && !isLoading) ..._resultSections(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _slotTile(_PhotoSlot slot) {
+    final hasPhoto = slot.bytes != null;
+    return GestureDetector(
+      onTap: isLoading ? null : () => _pickFor(slot),
+      child: AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hasPhoto ? kBlue.withValues(alpha: 0.6) : AppColors.border,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: hasPhoto
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.memory(slot.bytes!, fit: BoxFit.cover),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: GestureDetector(
+                        onTap: () => setState(() {
+                          slot.file = null;
+                          slot.bytes = null;
+                        }),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          slot.label.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.add_rounded,
+                      size: 26,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      slot.label,
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _resultSections() {
+    final sections = <Widget>[
+      _scoreHero(),
+      const SizedBox(height: 12),
+      if (_muscles.isNotEmpty) _muscleCard(),
+      const SizedBox(height: 12),
+      if (result!['posture'] != null) _postureCard(),
+      const SizedBox(height: 12),
+      _listCard('STRENGTHS', result!['strengths'], kGreen),
+      const SizedBox(height: 12),
+      _listCard('NEEDS WORK', result!['weaknesses'], kGold),
+      const SizedBox(height: 12),
+      _listCard('RECOMMENDATIONS', result!['recommendations'], kCyan),
+      if (_weakMuscles.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        _focusBanner(),
+      ],
+      const SizedBox(height: 16),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TextButton(
+            onPressed: () => setState(() {
+              result = null;
+              for (final s in _slots) {
+                s.file = null;
+                s.bytes = null;
+              }
+            }),
+            child: Text(
+              'New scan',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+      Center(
+        child: Text(
+          'For fitness purposes only. Not medical advice.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textMuted, fontSize: 10),
+        ),
+      ),
+      const SizedBox(height: 8),
+    ];
+
+    return [
+      for (var i = 0; i < sections.length; i++)
+        sections[i]
+            .animate()
+            .fadeIn(duration: 280.ms, delay: (i * 60).ms)
+            .slideY(begin: 0.04, end: 0, duration: 280.ms, delay: (i * 60).ms),
+    ];
+  }
+
+  Widget _card({required Widget child}) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: child,
+      );
+
+  Widget _scoreHero() {
+    final score = (result!['overall_score'] as num?)?.toInt() ?? 0;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('PHYSIQUE SCAN RESULT', style: kLabelSmall),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: score.toDouble()),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (_, v, _) => Text(
+                  '${v.round()}',
+                  style: const TextStyle(
+                    fontSize: 64,
+                    fontWeight: FontWeight.w900,
+                    color: kLime,
+                    height: 1.0,
+                    letterSpacing: -3,
+                  ),
                 ),
               ),
-              Text(
-                '/$maxScore',
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10, left: 6),
+                child: Text(
+                  '/100',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textMuted,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 4,
-              backgroundColor: barColor.withValues(alpha: 0.12),
-              valueColor: AlwaysStoppedAnimation<Color>(barColor),
-            ),
+          const SizedBox(height: 4),
+          Text(
+            'Overall Physique Score',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: AppColors.divider),
+          const SizedBox(height: 6),
+          if (result!['body_fat_estimate'] != null)
+            _infoRow('Body Fat', '${result!['body_fat_estimate']}', kPink),
+          if (result!['body_type'] != null)
+            _infoRow('Body Type', '${result!['body_type']}', null),
+          if (result!['symmetry_score'] != null)
+            _infoRow('Symmetry', '${result!['symmetry_score']}/10', null),
+          if (result!['visible_angles'] != null)
+            _infoRow(
+              'Angles Analyzed',
+              (result!['visible_angles'] as List).join(', '),
+              null,
+            ),
         ],
       ),
     );
   }
 
-  Widget infoRow(String label, String value) {
+  Widget _infoRow(String label, String value, Color? valueColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
@@ -205,7 +515,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
               value,
               textAlign: TextAlign.right,
               style: TextStyle(
-                color: AppColors.textPrimary,
+                color: valueColor ?? AppColors.textPrimary,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -216,327 +526,235 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: widget.embedded
-          ? null
-          : AppBar(title: const Text('Physique Scanner')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Add photos from different angles for the most accurate analysis',
-              style: secondaryTextStyle(context),
-            ),
-            const SizedBox(height: 12),
+  Widget _muscleCard() {
+    final weak = _weakMuscles.toSet();
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('MUSCLE DEVELOPMENT', style: kLabelSmall),
+          const SizedBox(height: 12),
+          for (final (name, score, feedback) in _muscles) ...[
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isLoading
-                        ? null
-                        : () => addPhoto(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                    label: const Text('CAMERA'),
-                    style: _scanBtnStyle,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isLoading
-                        ? null
-                        : () => addPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined, size: 18),
-                    label: const Text('GALLERY'),
-                    style: _scanBtnStyle,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Show selected photos
-            if (selectedImages.isNotEmpty) ...[
-              Text(
-                '${selectedImages.length} photo(s) selected',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: selectedImages.asMap().entries.map((entry) {
-                  return Chip(
-                    label: Text('Photo ${entry.key + 1}'),
-                    onDeleted: () => removePhoto(entry.key),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : scanPhysique,
-                  child: Text(
-                    isLoading ? 'Analyzing...' : '🔍 Analyze Physique',
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-            if (message.isNotEmpty) Text(message),
-            if (result != null) ...[
-              // Overall Score hero
-              AppCard(
-                margin: EdgeInsets.zero,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${result!['overall_score']}',
-                          style: const TextStyle(
-                            fontSize: 72,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.accent,
-                            height: 1.0,
-                            letterSpacing: -3,
-                          ),
+                SizedBox(
+                  width: 92,
+                  child: Row(
+                    children: [
+                      Text(
+                        name[0].toUpperCase() + name.substring(1),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
-                        Padding(
-                          padding: EdgeInsets.only(bottom: 12, left: 6),
+                      ),
+                      if (weak.contains(name)) ...[
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                           child: Text(
-                            '/100',
+                            'LAG',
                             style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textMuted,
+                              color: AppColors.danger,
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ),
                       ],
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: score / 10),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, v, _) => ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: v,
+                        minHeight: 4,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          score >= 7
+                              ? AppColors.success
+                              : score >= 5
+                                  ? kGold
+                                  : AppColors.danger,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'OVERALL PHYSIQUE SCORE',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Divider(height: 1, color: AppColors.divider),
-                    const SizedBox(height: 8),
-                    if (result!['body_fat_estimate'] != null)
-                      infoRow('Body Fat', '${result!['body_fat_estimate']}'),
-                    if (result!['body_type'] != null)
-                      infoRow('Body Type', '${result!['body_type']}'),
-                    if (result!['symmetry_score'] != null)
-                      infoRow('Symmetry', '${result!['symmetry_score']}/10'),
-                    if (result!['visible_angles'] != null)
-                      infoRow(
-                        'Angles Analyzed',
-                        (result!['visible_angles'] as List).join(', '),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Muscle Groups - only show visible ones
-              if (result!['muscle_groups'] != null)
-                AppCard(
-                  margin: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Muscle Groups',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Powered by AI',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ...['chest', 'back', 'shoulders', 'arms', 'legs', 'core']
-                          .where(
-                            (muscle) =>
-                                result!['muscle_groups'][muscle] != null,
-                          )
-                          .map((muscle) {
-                            final data = result!['muscle_groups'][muscle];
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                scoreBar(
-                                  muscle.toUpperCase(),
-                                  data['score'] ?? 0,
-                                  10,
-                                ),
-                                Text(
-                                  data['feedback'] ?? '',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                              ],
-                            );
-                          }),
-                    ],
                   ),
                 ),
-              const SizedBox(height: 12),
-
-              // Posture
-              if (result!['posture'] != null)
-                AppCard(
-                  margin: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Posture Analysis',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (result!['posture']['overall'] != null)
-                        infoRow('Overall', result!['posture']['overall']),
-                      if (result!['posture']['head_position'] != null)
-                        infoRow(
-                          'Head Position',
-                          result!['posture']['head_position'],
-                        ),
-                      if (result!['posture']['shoulder_alignment'] != null)
-                        infoRow(
-                          'Shoulders',
-                          result!['posture']['shoulder_alignment'],
-                        ),
-                      if (result!['posture']['hip_alignment'] != null)
-                        infoRow('Hips', result!['posture']['hip_alignment']),
-                      const SizedBox(height: 8),
-                      if (result!['posture']['feedback'] != null)
-                        Text(result!['posture']['feedback']),
-                    ],
+                const SizedBox(width: 10),
+                Text(
+                  '$score',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              const SizedBox(height: 12),
-
-              // Strengths
-              if ((result!['strengths'] as List? ?? []).isNotEmpty)
-                AppCard(
-                  margin: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Strengths ✅',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...(result!['strengths'] as List).map(
-                        (s) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text('• $s'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 12),
-
-              // Weaknesses
-              if ((result!['weaknesses'] as List? ?? []).isNotEmpty)
-                AppCard(
-                  margin: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Needs Work ⚠️',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...(result!['weaknesses'] as List).map(
-                        (s) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text('• $s'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 12),
-
-              // Recommendations
-              if ((result!['recommendations'] as List? ?? []).isNotEmpty)
-                AppCard(
-                  margin: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Recommendations 💪',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...(result!['recommendations'] as List).map(
-                        (s) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text('• $s'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Note about what couldn't be assessed
-              if (result!['note'] != null)
-                AppWarningCard(title: '📸 Note', body: result!['note'] ?? ''),
-
-              const SizedBox(height: 16),
-              Center(
+              ],
+            ),
+            if (feedback.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 3, bottom: 10),
                 child: Text(
-                  'For fitness purposes only. Not medical advice.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  feedback,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
                 ),
+              )
+            else
+              const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _postureCard() {
+    final posture = result!['posture'] as Map<String, dynamic>;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('POSTURE', style: kLabelSmall),
+          const SizedBox(height: 8),
+          if (posture['overall'] != null)
+            _infoRow('Overall', '${posture['overall']}', null),
+          if (posture['head_position'] != null)
+            _infoRow('Head', '${posture['head_position']}', null),
+          if (posture['shoulder_alignment'] != null)
+            _infoRow('Shoulders', '${posture['shoulder_alignment']}', null),
+          if (posture['hip_alignment'] != null)
+            _infoRow('Hips', '${posture['hip_alignment']}', null),
+          if (posture['feedback'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '${posture['feedback']}',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                height: 1.4,
               ),
-            ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _listCard(String title, dynamic items, Color accent) {
+    final list = ((items as List?) ?? []).cast<String>();
+    if (list.isEmpty) return const SizedBox.shrink();
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: kLabelSmall.copyWith(color: accent)),
+          const SizedBox(height: 8),
+          for (final s in list)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      s,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _focusBanner() {
+    final names = _weakMuscles.join(' & ');
+    return GestureDetector(
+      onTap: () => mainTabIndex.value = 3,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kPink.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kPink.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_weakMuscles.length} FOCUS AREAS FOUND',
+                    style: kLabelSmall.copyWith(color: kPink),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${names[0].toUpperCase()}${names.substring(1)} '
+                    'lagging — we built a plan.',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: kPink,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_forward_rounded,
+                color: Colors.black,
+                size: 20,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
-//

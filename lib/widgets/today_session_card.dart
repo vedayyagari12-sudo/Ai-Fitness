@@ -22,7 +22,7 @@ class TodaySessionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: kBgElevated,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kCyan.withValues(alpha: 0.4), width: 0.5),
+        border: Border.all(color: kBorder),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -33,28 +33,35 @@ class TodaySessionCard extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
               color: kTextPrimary,
             ),
           ),
-          Text(meta, style: kBodySmall),
-          Text(note, style: kBodySmall),
+          Text(
+            meta,
+            style: const TextStyle(fontSize: 12, color: kTextSecondary),
+          ),
+          if (note.isNotEmpty)
+            Text(
+              note,
+              style: const TextStyle(fontSize: 11, color: kTextMuted),
+            ),
           const SizedBox(height: 10),
           GestureDetector(
             onTap: onStart,
             child: Container(
               decoration: BoxDecoration(
-                color: kCyan,
+                color: kBlue,
                 borderRadius: BorderRadius.circular(20),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: const Text(
                 'Start →',
                 style: TextStyle(
-                  color: kBgDeep,
+                  color: Colors.black,
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

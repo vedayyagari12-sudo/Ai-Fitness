@@ -53,6 +53,7 @@ class WorkoutResponse(BaseModel):
     weight: float | None = None
     duration: int | None = None
     volume: float | None = None
+    created_at: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -108,3 +109,8 @@ class DashboardResponse(BaseModel):
     today_stats: TodayStats | None = None
     recent_meals: list[dict] = []
     recent_scans: list[dict] = []
+    weekly_goal: int = 4
+    sessions_this_week: int = 0
+    # Stable series for the TODAY trend card (independent of goal-specific charts):
+    # {"weight": {"labels": [...], "values": [...]}, "calories": {...}, "volume": {...}}
+    trends: dict = {}

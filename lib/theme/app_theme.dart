@@ -5,20 +5,25 @@ import 'package:google_fonts/google_fonts.dart';
 // ── Today/Dashboard design tokens ────────────────────────────────────────────
 // Self-contained palette + type scale for the Today screen (Step 1 spec).
 // Top-level so they don't touch the app-wide `AppColors` class below.
-const kBgDeep = Color(0xFF0D0D0F);
-const kBgCard = Color(0xFF141417);
-const kBgElevated = Color(0xFF1C1C21);
-const kBgHighlight = Color(0xFF2A2A32);
+// Palette matched to the reference screenshots: near-black canvas with
+// lime / blue / cyan / pink / gold accents. Each main tab owns an accent
+// (TODAY lime · SCAN blue · BODY pink · TRAIN cyan).
+const kBgDeep = Color(0xFF0A0A0A);
+const kBgCard = Color(0xFF141414);
+const kBgElevated = Color(0xFF1C1C1C);
+const kBgHighlight = Color(0xFF262629);
 const kLime = Color(0xFFC4FF33);
-const kBlue = Color(0xFF1CA7F0); // brand primary (replaces lime as the signature accent)
+const kBlue = Color(0xFF1CA7F0);
 const kCyan = Color(0xFF00C4D4);
-const kPink = Color(0xFFE86CA0);
-const kGold = Color(0xFFCDAA55);
-const kPurple = Color(0xFFA78BFA);
+const kPink = Color(0xFFFF3B79);
+const kGold = Color(0xFFFFD23F);
+const kPurple = Color(0xFF8B5CF6);
 const kGreen = Color(0xFF34D399);
+const kOrange = Color(0xFFFF8C00);
 const kTextPrimary = Color(0xFFFFFFFF);
-const kTextMuted = Color(0xFF8A8A9A);
-const kBorder = Color(0xFF4A4A5A);
+const kTextSecondary = Color(0xFF8A8A8A);
+const kTextMuted = Color(0xFF62626C);
+const kBorder = Color(0xFF242424);
 
 TextStyle get kDisplayLarge => GoogleFonts.inter(
   fontSize: 48,
@@ -38,8 +43,8 @@ TextStyle get kTitleLarge =>
     GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrimary);
 TextStyle get kLabelSmall => GoogleFonts.inter(
   fontSize: 10,
-  fontWeight: FontWeight.w500,
-  letterSpacing: 0.12,
+  fontWeight: FontWeight.w600,
+  letterSpacing: 1.8,
   color: kTextMuted,
 );
 TextStyle get kBodyMedium =>
@@ -62,43 +67,48 @@ class AppColors {
 
   // ── Surfaces (theme-aware) ─────────────────────────────────────────────────
   static Color get background =>
-      _l ? const Color(0xFFF3F4F7) : const Color(0xFF080808);
+      _l ? const Color(0xFFF3F4F7) : const Color(0xFF0A0A0A);
   static Color get surface =>
-      _l ? const Color(0xFFFFFFFF) : const Color(0xFF111111);
+      _l ? const Color(0xFFFFFFFF) : const Color(0xFF141414);
   static Color get surfaceElevated =>
-      _l ? const Color(0xFFEAECF0) : const Color(0xFF1A1A1A);
+      _l ? const Color(0xFFEAECF0) : const Color(0xFF1C1C1C);
 
   // ── Text (theme-aware) ─────────────────────────────────────────────────────
   static Color get textPrimary =>
       _l ? const Color(0xFF0B0D12) : const Color(0xFFFFFFFF);
   static Color get textSecondary =>
-      _l ? const Color(0xFF5A6172) : const Color(0xFF888888);
+      _l ? const Color(0xFF5A6172) : const Color(0xFF8A8A8A);
   static Color get textMuted =>
-      _l ? const Color(0xFF98A0AE) : const Color(0xFF444444);
+      _l ? const Color(0xFF98A0AE) : const Color(0xFF62626C);
 
   // ── Lines (theme-aware) ────────────────────────────────────────────────────
   static Color get divider =>
-      _l ? const Color(0x0D000000) : const Color(0x0FFFFFFF);
+      _l ? const Color(0x0D000000) : const Color(0xFF1C1C1C);
   static Color get border =>
-      _l ? const Color(0x14000000) : const Color(0x14FFFFFF);
+      _l ? const Color(0x14000000) : const Color(0xFF242424);
 
   // ── Accents (identical in both themes — stay const) ────────────────────────
-  static const Color accent = Color(
-    0xFF3B82F6,
-  ); // cool electric blue — signature
-  static const Color accentMuted = Color(0xFF2563EB);
+  static const Color accent = kBlue; // signature blue accent
+  static const Color accentMuted = Color(0xFF0E7CB8);
   static const Color accentSecondary = Color(0xFFFF3B30); // red — warnings/weak
   static const Color accentTertiary = Color(
-    0xFFFF9500,
+    0xFFFF8C00,
   ); // orange — streak/at-risk
   static const Color accentViolet = Color(
     0xFF8B5CF6,
   ); // violet — variety series
-  static const Color accentCyan = Color(0xFF22D3EE); // cyan — variety series
+  static const Color accentCyan = kCyan;
+  static const Color accentLime = kLime;
+  static const Color accentPink = kPink;
+  static const Color accentGreen = kGreen;
+  static const Color accentOrange = kOrange;
+  static const Color accentPurple = kPurple;
+  static const Color accentYellow = kGold;
   static const Color success = Color(0xFF30D158);
   static const Color error = Color(0xFFFF3B30);
+  static const Color danger = Color(0xFFFF3B30);
   static const Color warningSurface = Color(0xFF2A2416);
-  static const Color warningText = Color(0xFFFF9500);
+  static const Color warningText = Color(0xFFFF8C00);
 
   // ── Ring / chart hues (semantic data series) ───────────────────────────────
   static const Color ringMove = Color(0xFFFF3B30);
@@ -125,14 +135,14 @@ class AppTheme {
 
   static ThemeData get darkTheme => _build(
     brightness: Brightness.dark,
-    background: const Color(0xFF080808),
-    surface: const Color(0xFF111111),
-    surfaceElevated: const Color(0xFF1A1A1A),
+    background: const Color(0xFF0A0A0A),
+    surface: const Color(0xFF141414),
+    surfaceElevated: const Color(0xFF1C1C1C),
     textPrimary: const Color(0xFFFFFFFF),
-    textSecondary: const Color(0xFF888888),
+    textSecondary: const Color(0xFF8A8A8A),
     textMuted: const Color(0xFF444444),
-    border: const Color(0x14FFFFFF),
-    divider: const Color(0x0FFFFFFF),
+    border: const Color(0xFF242424),
+    divider: const Color(0xFF1C1C1C),
     statusIcons: Brightness.light,
   );
 
@@ -222,17 +232,19 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.accentLime,
+          foregroundColor: Colors.black,
           disabledBackgroundColor: surfaceElevated,
           disabledForegroundColor: textMuted,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: GoogleFonts.outfit(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
           ),
         ),
       ),

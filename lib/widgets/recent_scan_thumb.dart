@@ -8,14 +8,23 @@ class RecentScanThumb extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.tag,
+    this.onTap,
   });
 
   final String title; // "Chicken Bowl" / "Scan #14"
   final String subtitle; // "642 kcal" / "18.2% BF"
   final String tag; // "meal" / "body"
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: _card(),
+    );
+  }
+
+  Widget _card() {
     return Container(
       width: 140,
       decoration: BoxDecoration(

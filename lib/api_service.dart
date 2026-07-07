@@ -193,19 +193,100 @@ Future<Map<String, dynamic>?> scanFoodText(String description) async {
   }
 }
 
-Future<String?> getAiSummary() async {
+Future<bool> deleteWorkout(int workoutId) async {
+  try {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/workouts/$workoutId'),
+      headers: getHeaders(),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    return false;
+  }
+}
+
+Future<bool> updateWorkout(int workoutId, Map<String, dynamic> fields) async {
+  try {
+    final response = await http.put(
+      Uri.parse('$baseUrl/workouts/$workoutId'),
+      headers: getHeaders(),
+      body: jsonEncode(fields),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    return false;
+  }
+}
+
+Future<bool> deletePhysiqueScan(String scanId) async {
+  try {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/physique/scans/$scanId'),
+      headers: getHeaders(),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    return false;
+  }
+}
+
+Future<List<Map<String, dynamic>>> getBodyweightHistory() async {
   final userId = getCurrentUserId();
-  if (userId == null) return null;
+  if (userId == null) return [];
   try {
     final response = await http.get(
-      Uri.parse('$baseUrl/ai-summary/$userId'),
+      Uri.parse('$baseUrl/bodyweight/history/$userId'),
       headers: getHeaders(),
     );
     if (response.statusCode == 200) {
-      return (jsonDecode(response.body) as Map<String, dynamic>)['summary']
-          as String?;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return (data['entries'] as List).cast<Map<String, dynamic>>();
     }
-    return null;
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
+
+Future<bool> deleteAccount() async {
+  try {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/account'),
+      headers: getHeaders(),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    return false;
+  }
+}
+
+/// All physique scans for the signed-in user, oldest first.
+/// Reads Supabase directly (RLS scopes rows to the user's JWT).
+Future<List<Map<String, dynamic>>> getPhysiqueScans() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return [];
+  try {
+    final rows = await Supabase.instance.client
+        .from('physique_scans')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: true);
+    return (rows as List).cast<Map<String, dynamic>>();
+  } catch (e) {
+    return [];
+  }
+}
+
+Future<Map<String, dynamic>?> getUserProfile() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return null;
+  try {
+    final row = await Supabase.instance.client
+        .from('user_profiles')
+        .select()
+        .eq('id', userId)
+        .maybeSingle();
+    return row;
   } catch (e) {
     return null;
   }

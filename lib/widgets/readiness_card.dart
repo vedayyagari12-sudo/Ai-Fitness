@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../models/readiness_data.dart';
 import '../theme/app_theme.dart';
 
+/// Hero card on TODAY: three concentric progress rings (calories · protein ·
+/// body composition) around the readiness score, with stats in each corner.
 class ReadinessCard extends StatelessWidget {
   const ReadinessCard({super.key, required this.data});
 
@@ -17,43 +19,51 @@ class ReadinessCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: kBgCard,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
       ),
       padding: const EdgeInsets.all(16),
       child: Stack(
         children: [
-          // Concentric rings + score
+          // Concentric rings + score, animated on load.
           Center(
-            child: SizedBox(
-              width: 140,
-              height: 140,
-              child: CustomPaint(
-                painter: _RingPainter(
-                  calories: data.caloriesProgress,
-                  protein: data.proteinProgress,
-                  bodyFat: data.bodyFatProgress,
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        data.score.toString(),
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: kTextPrimary,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 1000),
+              curve: Curves.easeOutCubic,
+              builder: (context, t, _) => SizedBox(
+                width: 140,
+                height: 140,
+                child: CustomPaint(
+                  painter: _RingPainter(
+                    calories: data.caloriesProgress * t,
+                    protein: data.proteinProgress * t,
+                    bodyFat: data.bodyFatProgress * t,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${(data.score * t).round()}',
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: kTextPrimary,
+                            height: 1.0,
+                          ),
                         ),
-                      ),
-                      const Text(
-                        'READY',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.12,
-                          color: kTextMuted,
+                        const SizedBox(height: 2),
+                        const Text(
+                          'READY',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.8,
+                            color: kLime,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -152,7 +162,7 @@ class _RingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final outer = size.width / 2 - _stroke / 2; // ~67
+    final outer = size.width / 2 - _stroke / 2;
     _ring(canvas, center, outer, calories, kLime);
     _ring(canvas, center, outer - (_stroke + _gap), protein, kCyan);
     _ring(canvas, center, outer - 2 * (_stroke + _gap), bodyFat, kPink);
@@ -172,6 +182,7 @@ class _RingPainter extends CustomPainter {
       ..color = kBgHighlight;
     canvas.drawArc(rect, 0, 2 * math.pi, false, track);
 
+    if (progress <= 0) return;
     final arc = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = _stroke

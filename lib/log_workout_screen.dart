@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
-import 'dashboard_screen.dart' show triggerDashboardRefresh;
+import 'screens/today_screen.dart' show triggerTodayRefresh;
 import 'theme/app_theme.dart';
 import 'theme/app_widgets.dart';
 import 'utils/fuzzy_search.dart';
@@ -158,8 +158,8 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
     if (!mounted) return;
 
     if (success) {
-      HapticFeedback.heavyImpact();
-      triggerDashboardRefresh();
+      HapticFeedback.mediumImpact();
+      triggerTodayRefresh();
       setState(() => _saveState = 'success');
       AppSnackbar.success(context, 'Workout logged');
       Future.delayed(const Duration(seconds: 2), () {
@@ -228,11 +228,11 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
                   height: 56,
                   decoration: BoxDecoration(
                     color: switch (_saveState) {
-                      'success' => Colors.green,
+                      'success' => AppColors.success,
                       'error' => AppColors.error,
-                      _ => AppColors.accent,
+                      _ => kLime,
                     },
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: switch (_saveState) {
@@ -240,13 +240,13 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
                         width: 22,
                         height: 22,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: Colors.black,
                           strokeWidth: 2.5,
                         ),
                       ),
                       'success' => const Icon(
                         Icons.check_rounded,
-                        color: Colors.white,
+                        color: Colors.black,
                         size: 28,
                       ),
                       'error' => const Text(
@@ -258,11 +258,12 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
                         ),
                       ),
                       _ => const Text(
-                        'Save Workout',
+                        'LOG WORKOUT',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: Colors.black,
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     },

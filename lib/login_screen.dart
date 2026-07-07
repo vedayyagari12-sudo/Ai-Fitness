@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'screens/settings/settings_screen.dart';
+import 'screens/profile/profile_screen.dart' show LegalViewerScreen;
 import 'theme/app_theme.dart';
 import 'theme/app_widgets.dart';
 
@@ -245,10 +245,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _legalLink(BuildContext context, String label) {
+    final isPrivacy = label.toLowerCase().contains('privacy');
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => SettingsScreen()),
+        MaterialPageRoute(
+          builder: (_) => LegalViewerScreen(
+            title: isPrivacy ? 'Privacy Policy' : 'Terms of Service',
+            assetPath: isPrivacy
+                ? 'assets/legal/privacy_policy.html'
+                : 'assets/legal/terms_of_service.html',
+          ),
+        ),
       ),
       child: Text(
         label,

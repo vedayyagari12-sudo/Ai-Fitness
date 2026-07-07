@@ -126,6 +126,7 @@ def workout_to_response(workout: Workout):
         "weight": workout.weight,
         "duration": workout.duration,
         "volume": calculate_volume(workout),
+        "created_at": workout.created_at.isoformat() if workout.created_at else None,
     }
 
 
@@ -152,6 +153,18 @@ def parse_body_fat(value) -> float | None:
         return float(value)
     match = re.search(r"(\d+(?:\.\d+)?)", str(value))
     return float(match.group(1)) if match else None
+
+
+def parse_weekly_goal(workout_frequency) -> int:
+    """Map a profile workout_frequency string ("1-2", "3-5", "6+") to a weekly session goal."""
+    freq = str(workout_frequency or "").lower()
+    if any(x in freq for x in ["6+", "6 ", "7", "daily"]):
+        return 6
+    if any(x in freq for x in ["3-5", "3", "4", "5"]):
+        return 4
+    if any(x in freq for x in ["1-2", "1", "2"]):
+        return 2
+    return 4
 
 
 def estimate_tdee(
@@ -434,6 +447,21 @@ async def update_workout(
     return workout_to_response(db_workout)
 
 
+@app.delete("/workouts/{workout_id}")
+async def delete_workout(
+    workout_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(verify_token),
+):
+    workout = db.query(Workout).filter(Workout.id == workout_id).first()
+    if not workout:
+        raise HTTPException(status_code=404, detail="Workout not found")
+    ensure_user_access(workout.user_id, user)
+    db.delete(workout)
+    db.commit()
+    return {"deleted": True}
+
+
 @app.get("/users/{user_id}/exercises/{exercise}/last", response_model=WorkoutResponse)
 async def get_last_workout_for_exercise(
     user_id: str,
@@ -574,6 +602,27 @@ async def get_today_bodyweight(
     if logs:
         return {"logged_today": True, "weight_kg": logs[0]["weight_kg"]}
     return {"logged_today": False, "weight_kg": None}
+
+
+@app.get("/bodyweight/history/{user_id}")
+async def get_bodyweight_history(
+    user_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user=Depends(verify_token),
+):
+    ensure_user_access(user_id, user)
+    month_ago = (datetime.utcnow() - timedelta(days=29)).date().isoformat()
+    logs = await fetch_supabase_table(
+        "bodyweight_logs",
+        f"user_id=eq.{user_id}&created_at=gte.{month_ago}T00:00:00&order=created_at.asc&select=weight_kg,created_at",
+        token=credentials.credentials,
+    )
+    return {
+        "entries": [
+            {"weight_kg": float(l.get("weight_kg") or 0), "created_at": l.get("created_at")}
+            for l in logs
+        ]
+    }
 
 
 @app.get("/dashboard/{user_id}", response_model=DashboardResponse)
@@ -772,12 +821,24 @@ async def get_dashboard(
         body_fat_change=bf_change,
         volume=today_volume,
     )
+    weekly_goal = parse_weekly_goal(profile.get("workout_frequency"))
+    sessions_this_week = sum(1 for s in daily_sessions if s > 0)
+
+    trends = {
+        "weight": {"labels": weight_labels, "values": weight_values},
+        "calories": {"labels": day_labels, "values": daily_calories},
+        "volume": {"labels": day_labels, "values": daily_volume},
+    }
+
     return DashboardResponse(
         goal=goal,
         charts=charts,
         today_stats=today_stats,
         recent_meals=recent_meals,
         recent_scans=recent_scans,
+        weekly_goal=weekly_goal,
+        sessions_this_week=sessions_this_week,
+        trends=trends,
     )
 
 
@@ -796,14 +857,19 @@ async def scan_calories(
         {"mime_type": "image/jpeg", "data": base64_image},
         """Analyze this food image and return ONLY a JSON object like this:
         {
-            "food_name": "name of the food",
+            "food_name": "name of the dish as a whole",
             "calories": 000,
             "protein_g": 00,
             "carbs_g": 00,
             "fat_g": 00,
-            "serving_size": "description of portion"
+            "serving_size": "description of portion",
+            "items": [
+                {"name": "individual ingredient/component", "grams": 000, "confidence": 0-100, "calories": 000}
+            ]
         }
-        Be as accurate as possible. Return only JSON, no other text.""",
+        List each visually distinct component of the meal as an item with your
+        confidence (0-100) that you identified it correctly. Item calories should
+        roughly sum to the total. Be as accurate as possible. Return only JSON, no other text.""",
     ])
 
     result = response.text
@@ -821,7 +887,9 @@ async def scan_calories_text(request: dict, _user=Depends(verify_token)):
     response = model.generate_content(
         f'The user described their meal as: "{description}"\n'
         "Return ONLY valid JSON (no markdown fences):\n"
-        '{"food_name":"...","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"serving_size":"estimated portion"}'
+        '{"food_name":"...","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"serving_size":"estimated portion",'
+        '"items":[{"name":"component","grams":0,"confidence":0,"calories":0}]}\n'
+        "List each meal component as an item with grams, a 0-100 confidence and its calories."
     )
     clean = response.text.replace("```json", "").replace("```", "").strip()
     try:
@@ -949,6 +1017,32 @@ Return ONLY this JSON with no other text:
     return scan_data
 
 
+@app.delete("/physique/scans/{scan_id}")
+async def delete_physique_scan(
+    scan_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user=Depends(verify_token),
+):
+    user_id = get_user_id(user)
+    rows = await fetch_supabase_table(
+        "physique_scans",
+        f"id=eq.{scan_id}&select=id,user_id",
+        token=credentials.credentials,
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    ensure_user_access(str(rows[0].get("user_id")), user)
+    uhdr = supabase_user_headers(credentials.credentials)
+    async with httpx.AsyncClient() as client:
+        resp = await client.delete(
+            f"{SUPABASE_URL}/rest/v1/physique_scans?id=eq.{scan_id}&user_id=eq.{user_id}",
+            headers=uhdr,
+        )
+    if resp.status_code not in (200, 204):
+        raise HTTPException(status_code=500, detail="Failed to delete scan")
+    return {"deleted": True}
+
+
 def _physique_priority(score) -> str:
     if score is None:
         return None
@@ -1069,13 +1163,34 @@ async def generate_workout(
     else:
         recovery_block = "Recovery Status: No muscles trained in last 48 hrs — all fresh."
 
-    instructions_block = """Instructions:
+    goal_key = str(profile_goal or "").lower()
+    if "bulk" in goal_key or "muscle" in goal_key:
+        goal_block = """Goal-specific rules (BULK):
+- Prioritize compound lifts (squat, bench, deadlift, rows, overhead press)
+- Keep reps in the 6-12 range for hypertrophy
+- Apply progressive overload: if a previous weight is known, suggest +2.5kg
+- Use higher overall volume
+- Include one tip about maintaining a calorie surplus for muscle growth"""
+    elif "cut" in goal_key or "fat" in goal_key or "lose" in goal_key:
+        goal_block = """Goal-specific rules (CUT):
+- Keep heavy compound lifts to preserve muscle mass
+- Slightly reduce total volume vs a bulk
+- Include one tip about protein intake (2.2g per kg bodyweight) to prevent muscle loss
+- Do NOT suggest excessive cardio"""
+    else:
+        goal_block = """Goal-specific rules (ATHLETIC / MAINTAIN):
+- Mix strength work and power/explosive movements
+- Include unilateral exercises (lunges, single-arm rows, split squats)
+- Vary rep ranges across exercises"""
+
+    instructions_block = f"""Instructions:
 - Prioritize HIGH and MEDIUM muscles with more sets and volume
 - Give STRONG muscles 1-2 maintenance sets only
 - Avoid RECOVERING muscles as primary movers today
 - Select exercise difficulty appropriate for fitness level
 - Choose exercises compatible with available equipment
-- Adjust total volume based on goal (bulk = more volume, cut = less rest, athletic = compound-heavy)"""
+
+{goal_block}"""
 
     scan_tip = (
         "" if has_scan
@@ -1088,6 +1203,7 @@ async def generate_workout(
         "duration_minutes": {duration},
         "goal": "{profile_goal}",
         "focus": "{focus}",{scan_tip}
+        "why_this_session": "<2-3 sentences explaining WHY this session was built this way: reference the specific lagging muscles from the physique priority map, recovery status, and the user's goal. Speak directly to the user.>",
         "warmup": [
             {{"exercise": "<name>", "duration": "<time>", "instructions": "<how to>"}}
         ],
@@ -1116,7 +1232,18 @@ async def generate_workout(
     response = model.generate_content(prompt)
     result = response.text
     clean = result.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean)
+    workout = json.loads(clean)
+    if has_scan:
+        weak = [m for m, s in muscle_scores.items() if s is not None and s <= 6]
+        fallback_why = (
+            f"Built around your latest physique scan — extra volume for {', '.join(weak).lower()}."
+            if weak
+            else "Built from your latest physique scan with balanced volume across muscle groups."
+        )
+    else:
+        fallback_why = "A balanced session for your goal — take a physique scan to get targeted programming."
+    workout.setdefault("why_this_session", fallback_why)
+    return workout
 
 
 @app.get("/muscle-balance/{user_id}")
