@@ -218,6 +218,23 @@ Future<bool> updateWorkout(int workoutId, Map<String, dynamic> fields) async {
   }
 }
 
+/// Persist an already-analyzed physique scan (retry path when the insert
+/// during /physique/scan failed) — no AI call involved.
+Future<bool> savePhysiqueScan(Map<String, dynamic> scanData) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/physique/scans'),
+      headers: getHeaders(),
+      body: jsonEncode(scanData),
+    );
+    if (response.statusCode != 200) return false;
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['saved'] == true;
+  } catch (e) {
+    return false;
+  }
+}
+
 Future<bool> deletePhysiqueScan(String scanId) async {
   try {
     final response = await http.delete(

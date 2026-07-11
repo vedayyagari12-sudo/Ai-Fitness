@@ -40,6 +40,8 @@ class _WorkoutsTabScreenState extends State<WorkoutsTabScreen> {
             SegmentedBar(
               labels: const ['TODAY', 'LOG', 'HISTORY'],
               index: _seg,
+              // HISTORY reloads itself via historyTick whenever a workout is
+              // written, so no refresh is needed on segment entry.
               onChanged: (i) => setState(() => _seg = i),
             ),
             const SizedBox(height: 4),

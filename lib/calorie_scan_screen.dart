@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'api_service.dart';
-import 'screens/today_screen.dart' show triggerTodayRefresh;
+import 'services/nav_service.dart' show triggerTodayRefresh;
 import 'services/permission_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/snackbar.dart';
@@ -57,17 +57,17 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
     super.dispose();
   }
 
+  /// Use the same calorie target the TODAY dashboard shows — one source of
+  /// truth (the backend's TDEE) so the "% of daily goal" numbers agree.
   Future<void> _loadCalorieTarget() async {
-    final profile = await getUserProfile();
-    if (profile == null || !mounted) return;
-    final w = (profile['weight_kg'] as num?)?.toDouble();
-    if (w == null) return;
-    final h = (profile['height_cm'] as num?)?.toDouble() ?? 170;
-    final a = (profile['age'] as num?)?.toInt() ?? 25;
-    final male =
-        (profile['gender'] ?? '').toString().toLowerCase().startsWith('m');
-    final bmr = 10 * w + 6.25 * h - 5 * a + (male ? 5 : -161);
-    setState(() => _calorieTarget = (bmr * 1.5).roundToDouble());
+    final dash = await getDashboard();
+    final target =
+        ((dash?['today_stats'] as Map<String, dynamic>?)?['calorie_target']
+                as num?)
+            ?.toDouble();
+    if (target != null && target > 0 && mounted) {
+      setState(() => _calorieTarget = target);
+    }
   }
 
   Future<void> _scanFromXFile(XFile image) async {

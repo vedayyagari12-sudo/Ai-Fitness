@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'api_service.dart';
-import 'services/nav_service.dart';
+import 'services/nav_service.dart' show mainTabIndex;
 import 'services/permission_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/snackbar.dart';
@@ -114,13 +114,11 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
     final bytes = await image.readAsBytes();
     if (!mounted) return;
     setState(() {
-      slotOf(slot).file = image;
-      slotOf(slot).bytes = bytes;
+      slot.file = image;
+      slot.bytes = bytes;
       message = '';
     });
   }
-
-  _PhotoSlot slotOf(_PhotoSlot s) => _slots[_slots.indexOf(s)];
 
   Future<void> scanPhysique() async {
     if (_filled.isEmpty) {
@@ -160,10 +158,27 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
 
       if (!mounted) return;
       if (response.statusCode == 200) {
+        final data = jsonDecode(responseBody) as Map<String, dynamic>;
         setState(() {
-          result = jsonDecode(responseBody);
+          result = data;
           message = '';
         });
+        // The AI analysis succeeded but the row failed to persist (e.g. a
+        // transient DB error). Retry the save alone — never re-run the paid
+        // analysis for a persistence failure.
+        if (data['saved'] == false) {
+          final retried = await savePhysiqueScan(data);
+          if (!mounted) return;
+          if (retried) {
+            data['saved'] = true;
+          } else {
+            AppSnackbar.error(
+              context,
+              "Analysis complete, but we couldn't save this scan — "
+              'it won\'t appear in BODY',
+            );
+          }
+        }
       } else {
         setState(() => message = 'Could not analyze photos — try again.');
       }

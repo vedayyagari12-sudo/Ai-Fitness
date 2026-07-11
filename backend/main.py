@@ -933,6 +933,7 @@ async def log_calories(
 @app.post("/physique/scan")
 async def scan_physique(
     files: List[UploadFile] = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     user=Depends(verify_token),
 ):
     user_id = get_user_id(user)
@@ -989,32 +990,67 @@ Return ONLY this JSON with no other text:
     clean = result.replace("```json", "").replace("```", "").strip()
     scan_data = json.loads(clean)
 
-    muscle_groups = scan_data.get("muscle_groups", {}) or {}
-
-    async with httpx.AsyncClient() as client:
-        await client.post(
-            f"{SUPABASE_URL}/rest/v1/physique_scans",
-            headers={**supabase_headers(), "Prefer": "return=minimal"},
-            json={
-                "user_id": user_id,
-                "overall_score": scan_data.get("overall_score"),
-                "body_fat_estimate": scan_data.get("body_fat_estimate"),
-                "symmetry_score": scan_data.get("symmetry_score"),
-                "body_type": scan_data.get("body_type"),
-                "chest_score": (muscle_groups.get("chest") or {}).get("score"),
-                "back_score": (muscle_groups.get("back") or {}).get("score"),
-                "shoulders_score": (muscle_groups.get("shoulders") or {}).get("score"),
-                "arms_score": (muscle_groups.get("arms") or {}).get("score"),
-                "legs_score": (muscle_groups.get("legs") or {}).get("score"),
-                "core_score": (muscle_groups.get("core") or {}).get("score"),
-                "posture_check": json.dumps(scan_data.get("posture")),
-                "strengths": scan_data.get("strengths"),
-                "weaknesses": scan_data.get("weaknesses"),
-                "recommendations": scan_data.get("recommendations"),
-            },
-        )
-
+    saved = await _insert_physique_scan(
+        user_id, scan_data, credentials.credentials
+    )
+    scan_data["saved"] = saved
     return scan_data
+
+
+def _physique_scan_row(user_id: str, scan_data: dict) -> dict:
+    muscle_groups = scan_data.get("muscle_groups", {}) or {}
+    return {
+        "user_id": user_id,
+        "overall_score": scan_data.get("overall_score"),
+        "body_fat_estimate": scan_data.get("body_fat_estimate"),
+        "symmetry_score": scan_data.get("symmetry_score"),
+        "body_type": scan_data.get("body_type"),
+        "chest_score": (muscle_groups.get("chest") or {}).get("score"),
+        "back_score": (muscle_groups.get("back") or {}).get("score"),
+        "shoulders_score": (muscle_groups.get("shoulders") or {}).get("score"),
+        "arms_score": (muscle_groups.get("arms") or {}).get("score"),
+        "legs_score": (muscle_groups.get("legs") or {}).get("score"),
+        "core_score": (muscle_groups.get("core") or {}).get("score"),
+        "posture_check": json.dumps(scan_data.get("posture")),
+        "strengths": scan_data.get("strengths"),
+        "weaknesses": scan_data.get("weaknesses"),
+        "recommendations": scan_data.get("recommendations"),
+    }
+
+
+async def _insert_physique_scan(user_id: str, scan_data: dict, token: str) -> bool:
+    """Insert with the USER'S JWT, not the anon key — physique_scans has an
+    RLS policy scoped to auth.uid() = user_id, so an anon-key insert is
+    silently rejected by Postgres and the scan never actually saves."""
+    uhdr = supabase_user_headers(token)
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{SUPABASE_URL}/rest/v1/physique_scans",
+            headers={**uhdr, "Prefer": "return=minimal"},
+            json=_physique_scan_row(user_id, scan_data),
+        )
+    saved = resp.status_code in (200, 201, 204)
+    if not saved:
+        logger.warning(
+            "physique scan insert failed for user %s: %s %s",
+            user_id, resp.status_code, resp.text,
+        )
+    return saved
+
+
+@app.post("/physique/scans")
+async def save_physique_scan(
+    scan_data: dict,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user=Depends(verify_token),
+):
+    """Persist an already-analyzed scan (retry path after a failed insert
+    during /physique/scan) — no AI call, so retries are free."""
+    user_id = get_user_id(user)
+    saved = await _insert_physique_scan(
+        user_id, scan_data, credentials.credentials
+    )
+    return {"saved": saved}
 
 
 @app.delete("/physique/scans/{scan_id}")

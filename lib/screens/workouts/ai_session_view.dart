@@ -7,7 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../api_service.dart';
-import '../../screens/today_screen.dart' show triggerTodayRefresh;
+import '../../services/nav_service.dart'
+    show triggerTodayRefresh, triggerHistoryRefresh;
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
@@ -40,8 +41,7 @@ class _GeneratedExercise {
   bool checked = false;
 }
 
-class _AiSessionViewState extends State<AiSessionView>
-    with AutomaticKeepAliveClientMixin {
+class _AiSessionViewState extends State<AiSessionView> {
   Map<String, dynamic>? workout;
   List<_GeneratedExercise> mainExercises = [];
   Set<String> _lagging = {}; // canonical lagging muscle groups
@@ -50,9 +50,10 @@ class _AiSessionViewState extends State<AiSessionView>
   bool _started = false; // true once the user has begun ticking off exercises
   String error = '';
 
-  @override
-  bool get wantKeepAlive => true;
-
+  // Note: a fresh session is generated every time the TRAIN tab is entered
+  // (MainScreen swaps tab subtrees, so initState reruns) — that is also how
+  // a new physique scan reaches the session, since scans happen on the SCAN
+  // tab while this widget is unmounted.
   @override
   void initState() {
     super.initState();
@@ -189,6 +190,7 @@ class _AiSessionViewState extends State<AiSessionView>
       final n = done.length;
       setState(() => _started = false);
       triggerTodayRefresh();
+      triggerHistoryRefresh();
       AppSnackbar.success(
         context,
         '$n exercise${n == 1 ? '' : 's'} logged — nice work 💪',
@@ -270,7 +272,6 @@ class _AiSessionViewState extends State<AiSessionView>
   // ── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     return RefreshIndicator(
       onRefresh: _generate,
       color: kCyan,

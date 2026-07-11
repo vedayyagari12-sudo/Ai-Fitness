@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
-import 'screens/today_screen.dart';
+import 'screens/today_screen.dart' show TodayScreen;
 import 'login_screen.dart';
 import 'screens/onboarding/goal_picker_screen.dart';
 import 'screens/body/body_screen.dart';

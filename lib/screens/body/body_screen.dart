@@ -250,11 +250,12 @@ class _BodyScreenState extends State<BodyScreen> {
                     ),
                     const SizedBox(height: 12),
                     _statCard(
-                      'WEIGHT',
+                      'WEIGHT · TAP TO LOG',
                       weightLb > 0 ? '${weightLb.toStringAsFixed(0)}lb' : '—',
                       weightChgLb,
                       'lb',
                       neutral: true,
+                      onTap: _logWeightSheet,
                     ),
                   ],
                 ),
@@ -394,6 +395,65 @@ class _BodyScreenState extends State<BodyScreen> {
     );
   }
 
+  /// Bottom sheet to log today's bodyweight — feeds the WEIGHT trend charts.
+  Future<void> _logWeightSheet() async {
+    final ctrl = TextEditingController(
+      text: _bodyweight.isNotEmpty
+          ? '${(_bodyweight.last['weight_kg'] as num?)?.toDouble() ?? ''}'
+          : '',
+    );
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          24 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text("TODAY'S BODYWEIGHT", style: kLabelSmall),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(suffixText: 'kg'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save weight'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final kg = double.tryParse(ctrl.text);
+    if (kg == null || kg <= 0) {
+      AppSnackbar.error(context, 'Enter a valid weight');
+      return;
+    }
+    final resp = await logBodyweight(kg);
+    if (!mounted) return;
+    if (resp != null && resp['error'] == null) {
+      AppSnackbar.success(context, 'Weight logged');
+      _load();
+    } else {
+      AppSnackbar.error(context, 'Could not save weight — try again');
+    }
+  }
+
   Widget _statCard(
     String label,
     String value,
@@ -402,6 +462,7 @@ class _BodyScreenState extends State<BodyScreen> {
     bool favorableWhenDown = false,
     bool neutral = false,
     Color? valueColor,
+    VoidCallback? onTap,
   }) {
     final down = change < 0;
     final favorable = neutral ? false : (favorableWhenDown ? down : !down);
@@ -415,7 +476,7 @@ class _BodyScreenState extends State<BodyScreen> {
             ? '${mag.toStringAsFixed(1)}%'
             : '${change >= 0 ? '+' : '-'}${mag.toStringAsFixed(1)} lb';
 
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -461,6 +522,13 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
         ],
       ),
+    );
+
+    if (onTap == null) return card;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: card,
     );
   }
 

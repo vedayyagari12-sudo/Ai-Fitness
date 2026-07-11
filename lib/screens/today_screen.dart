@@ -16,11 +16,6 @@ import '../widgets/today_session_card.dart';
 import '../widgets/trend_card.dart';
 import 'profile/profile_screen.dart';
 
-// Global refresh hook so other screens (scan, log) can refresh TODAY
-// after writing data — mirrors the old triggerDashboardRefresh pattern.
-void Function()? _todayRefreshHook;
-void triggerTodayRefresh() => _todayRefreshHook?.call();
-
 class TodayScreen extends StatefulWidget {
   const TodayScreen({super.key});
 
@@ -36,13 +31,13 @@ class _TodayScreenState extends State<TodayScreen> {
   @override
   void initState() {
     super.initState();
-    _todayRefreshHook = _load;
+    todayTick.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
-    if (_todayRefreshHook == _load) _todayRefreshHook = null;
+    todayTick.removeListener(_load);
     super.dispose();
   }
 
@@ -281,9 +276,14 @@ class _TodayScreenState extends State<TodayScreen> {
               const SizedBox(width: 8),
             ],
             GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
-              ),
+              onTap: () => Navigator.of(context)
+                  .push(
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  )
+                  // Goal/weight/age edits in Profile change readiness math,
+                  // the trend goal badge and calorie/protein targets — reload
+                  // on return since TODAY stays mounted under the push.
+                  .then((_) => _load()),
               child: Container(
                 width: 36,
                 height: 36,
