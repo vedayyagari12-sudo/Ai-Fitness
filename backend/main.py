@@ -674,7 +674,7 @@ async def get_dashboard(
     )
     physique_scans = await fetch_supabase_table(
         "physique_scans",
-        f"user_id=eq.{user_id}&order=created_at.asc&select=body_fat_estimate,created_at",
+        f"user_id=eq.{user_id}&order=created_at.asc&select=body_fat_estimate,overall_score,created_at",
         token=credentials.credentials,
     )
 
@@ -800,6 +800,7 @@ async def get_dashboard(
         {
             "number": total_scans - i,
             "body_fat": parse_body_fat(sc.get("body_fat_estimate")) or 0.0,
+            "score": sc.get("overall_score"),
             "created_at": sc.get("created_at"),
         }
         for i, sc in enumerate(physique_scans[::-1][:2])
@@ -1409,15 +1410,35 @@ async def delete_account(
         if prof_resp.status_code not in (200, 204):
             print(f"Warning: delete from user_profiles returned {prof_resp.status_code}: {prof_resp.text}")
 
-        # 3. Delete auth user via service role key (optional — requires env var)
+        # 3. Delete auth user via service role key (requires env var).
+        #    Without it the login credential survives and the user can still
+        #    sign back in — report that honestly instead of claiming success.
+        auth_user_deleted = False
         service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         if service_role_key:
-            await client.delete(
+            auth_resp = await client.delete(
                 f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
                 headers={
                     "apikey": service_role_key,
                     "Authorization": f"Bearer {service_role_key}",
                 },
             )
+            auth_user_deleted = auth_resp.status_code in (200, 204)
+            if not auth_user_deleted:
+                logger.warning(
+                    "auth user delete failed for %s: %s %s",
+                    user_id, auth_resp.status_code, auth_resp.text,
+                )
+        else:
+            logger.warning(
+                "SUPABASE_SERVICE_ROLE_KEY not set — auth user %s NOT deleted",
+                user_id,
+            )
 
-    return {"success": True, "message": "Account and all data deleted."}
+    return {
+        "success": True,
+        "auth_user_deleted": auth_user_deleted,
+        "message": "Account and all data deleted."
+        if auth_user_deleted
+        else "All data deleted, but the login itself could not be removed.",
+    }

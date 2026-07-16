@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../api_service.dart';
 import '../models/readiness_data.dart';
 import '../services/nav_service.dart';
+import '../services/split_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import '../utils/units.dart';
@@ -29,6 +30,7 @@ class _TodayScreenState extends State<TodayScreen> {
   Map<String, dynamic>? _dash;
   Map<String, dynamic>? _streak;
   List<Map<String, dynamic>> _weeklySummary = [];
+  TrainingSplit _split = TrainingSplit.auto;
 
   @override
   void initState() {
@@ -49,11 +51,13 @@ class _TodayScreenState extends State<TodayScreen> {
       getStreak(),
       getWeeklySummary(),
     ]);
+    final split = await SplitService.getSplit();
     if (!mounted) return;
     setState(() {
       _dash = results[0] as Map<String, dynamic>?;
       _streak = results[1] as Map<String, dynamic>?;
       _weeklySummary = (results[2] as List).cast<Map<String, dynamic>>();
+      _split = split;
       _loading = false;
     });
   }
@@ -94,7 +98,7 @@ class _TodayScreenState extends State<TodayScreen> {
       score: score,
       caloriesProgress: fueled,
       proteinProgress: proteinP,
-      bodyFatProgress: weekProgress,
+      sessionsProgress: weekProgress,
       fueledValue: '${(fueled * 100).round()}%',
       caloriesLabel: '${_formatThousands(kcal.round())} kcal',
       loadValue: '$volume',
@@ -106,16 +110,20 @@ class _TodayScreenState extends State<TodayScreen> {
       bodyFatDelta: bfChange != 0
           ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}%'
           : '',
+      trainingDetail: '$sessions of $weeklyGoal sessions this week',
+      fuelDetail: kcalTarget > 0
+          ? '${_formatThousands(kcal.round())} of '
+              '${_formatThousands(kcalTarget.round())} kcal today'
+          : '${_formatThousands(kcal.round())} kcal today',
+      proteinDetail: proteinTarget > 0
+          ? '${protein.round()}g of ${proteinTarget.round()}g today'
+          : '${protein.round()}g today',
     );
   }
 
-  /// Rotating focus split — matches the AI session generator's rotation.
-  String _sessionFocus() {
-    const rotation = [
-      'Push', 'Pull', 'Legs', 'Upper Body', 'Push', 'Full Body', 'Pull',
-    ];
-    return rotation[(DateTime.now().weekday - 1) % rotation.length];
-  }
+  /// Today's focus — follows the user's chosen training split, matching
+  /// what the AI session generator will build.
+  String _sessionFocus() => SplitService.focusForToday(_split);
 
   String _sessionName() {
     final focus = _sessionFocus();
@@ -175,6 +183,21 @@ class _TodayScreenState extends State<TodayScreen> {
           (w['total_volume'] as num?)?.toDouble() ?? 0.0,
       ];
 
+  int? get _latestScanScore {
+    final scans = ((_dash?['recent_scans'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    if (scans.isEmpty) return null;
+    return (scans.first['score'] as num?)?.toInt();
+  }
+
+  /// Total scan count — the newest recent_scans entry carries its ordinal.
+  int get _scanCount {
+    final scans = ((_dash?['recent_scans'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    if (scans.isEmpty) return 0;
+    return (scans.first['number'] as num?)?.toInt() ?? 0;
+  }
+
   List<double> get _bfPoints {
     final charts = (_dash?['charts'] as List?) ?? [];
     final bf = charts.cast<Map<String, dynamic>?>().firstWhere(
@@ -232,6 +255,8 @@ class _TodayScreenState extends State<TodayScreen> {
           Expanded(
             child: PhysiqueMiniCard(
               bodyFat: bf > 0 ? bf : null,
+              score: _latestScanScore,
+              scanCount: _scanCount,
               delta: bfChange != 0
                   ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}% vs last scan'
                   : null,
@@ -372,7 +397,7 @@ class _TodayScreenState extends State<TodayScreen> {
 
     if (meals.isEmpty && scans.isEmpty) {
       return Container(
-        height: 84,
+        height: 92,
         decoration: BoxDecoration(
           color: kBgCard,
           borderRadius: BorderRadius.circular(12),
@@ -407,7 +432,7 @@ class _TodayScreenState extends State<TodayScreen> {
     ];
 
     return SizedBox(
-      height: 84,
+      height: 92,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: thumbs.length,

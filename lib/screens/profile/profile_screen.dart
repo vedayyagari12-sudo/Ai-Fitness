@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../api_service.dart';
 import '../../services/app_state_service.dart';
+import '../../services/split_service.dart';
 import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/snackbar.dart';
@@ -20,6 +21,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic> _profile = {};
+  TrainingSplit _split = TrainingSplit.auto;
   bool _loading = true;
 
   @override
@@ -30,9 +32,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _load() async {
     final profile = await getUserProfile();
+    final split = await SplitService.getSplit();
     if (!mounted) return;
     setState(() {
       _profile = profile ?? {};
+      _split = split;
       _loading = false;
     });
   }
@@ -49,8 +53,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String title,
     String key,
     List<(String, String)> options, // (label, storedValue)
-  ) async {
-    final current = '${_profile[key] ?? ''}';
+    {
+    // Overrides for settings that don't live in user_profiles
+    // (e.g. the training split, stored as a device preference).
+    String? currentOverride,
+    Future<void> Function(String value)? onPick,
+  }) async {
+    final current = currentOverride ?? '${_profile[key] ?? ''}';
     final picked = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.surface,
@@ -89,7 +98,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
-    if (picked != null) await _save(key, picked);
+    if (picked != null) {
+      if (onPick != null) {
+        await onPick(picked);
+      } else {
+        await _save(key, picked);
+      }
+    }
   }
 
   Future<void> _editNumber(
@@ -225,9 +240,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    final ok = await deleteAccount();
+    final result = await deleteAccount();
     if (!mounted) return;
-    if (ok) {
+    if (result != null && result['success'] == true) {
+      if (result['auth_user_deleted'] != true) {
+        // Data rows are gone but the login credential survived (server is
+        // missing its admin key) — tell the user instead of faking success.
+        AppSnackbar.info(
+          context,
+          'Your data was deleted, but the login could not be fully removed '
+          'yet — contact support to finish removal.',
+        );
+        await Future.delayed(const Duration(milliseconds: 1500));
+      }
       AppStateService.setGuestMode(false);
       await Supabase.instance.client.auth.signOut();
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
@@ -345,6 +370,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ]),
                   ),
                   _detailRow(
+                    'Gender',
+                    _display('gender'),
+                    () => _editChoice('Gender', 'gender', const [
+                      ('Male', 'Male'),
+                      ('Female', 'Female'),
+                      ('Other', 'Other'),
+                    ]),
+                  ),
+                  _detailRow(
                     'Age',
                     _display('age'),
                     () => _editNumber('Age', 'age'),
@@ -394,6 +428,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'Weekly sessions',
                       'workout_frequency',
                       const [('1-2', '1-2'), ('3-5', '3-5'), ('6+', '6+')],
+                    ),
+                  ),
+                  _detailRow(
+                    'Training Split',
+                    SplitService.label(_split),
+                    () => _editChoice(
+                      'Training split',
+                      'training_split',
+                      [
+                        for (final s in TrainingSplit.values)
+                          (SplitService.label(s), s.name),
+                      ],
+                      currentOverride: _split.name,
+                      onPick: (value) async {
+                        final split = TrainingSplit.values
+                            .firstWhere((s) => s.name == value);
+                        await SplitService.setSplit(split);
+                        if (!mounted) return;
+                        setState(() => _split = split);
+                        AppSnackbar.success(this.context, 'Saved');
+                      },
                     ),
                   ),
                   const SizedBox(height: 24),

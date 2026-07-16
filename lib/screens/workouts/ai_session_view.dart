@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../api_service.dart';
 import '../../services/nav_service.dart'
     show triggerTodayRefresh, triggerHistoryRefresh;
+import '../../services/split_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
@@ -61,19 +62,9 @@ class _AiSessionViewState extends State<AiSessionView> {
   }
 
   // ── Data ────────────────────────────────────────────────────────────────
-  /// Focus split derived from the day so consecutive sessions rotate.
-  String get _autoFocus {
-    const rotation = [
-      'Push', // Mon
-      'Pull', // Tue
-      'Legs', // Wed
-      'Upper Body', // Thu
-      'Push', // Fri
-      'Full Body', // Sat
-      'Pull', // Sun
-    ];
-    return rotation[(DateTime.now().weekday - 1) % rotation.length];
-  }
+  /// Today's focus — follows the user's chosen training split
+  /// (Profile → Training Split); refreshed at the start of each generation.
+  String _focus = 'Full Body';
 
   Future<void> _loadLagging() async {
     final muscle = await getMuscleBalance();
@@ -97,6 +88,7 @@ class _AiSessionViewState extends State<AiSessionView> {
       _started = false;
     });
 
+    _focus = SplitService.focusForToday(await SplitService.getSplit());
     await _loadLagging();
 
     try {
@@ -111,7 +103,7 @@ class _AiSessionViewState extends State<AiSessionView> {
         body: jsonEncode({
           'goal': 'Build Muscle',
           'equipment': 'Full Gym',
-          'focus': _autoFocus,
+          'focus': _focus,
           'duration': 60,
           'intensity': 'Medium',
         }),
@@ -344,7 +336,7 @@ class _AiSessionViewState extends State<AiSessionView> {
 
   Widget _sessionView() {
     final name = (workout!['workout_name'] as String?)?.trim();
-    final focus = (workout!['focus'] as String?) ?? _autoFocus;
+    final focus = (workout!['focus'] as String?) ?? _focus;
     final duration = (workout!['duration_minutes'] as num?)?.toInt() ?? 60;
 
     final children = <Widget>[

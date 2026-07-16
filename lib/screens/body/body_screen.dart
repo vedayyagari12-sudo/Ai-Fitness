@@ -20,9 +20,10 @@ class BodyScreen extends StatefulWidget {
 }
 
 class _MuscleScore {
-  _MuscleScore(this.name, this.score);
+  _MuscleScore(this.name, this.score, {required this.fromScan});
   final String name;
-  final int score; // 0–100 display scale
+  final double score; // 0–10 (scan scale)
+  final bool fromScan; // false = derived from training volume, no scan
   bool lag = false;
   Color color = kGreen;
 }
@@ -31,6 +32,7 @@ class _BodyScreenState extends State<BodyScreen> {
   List<Map<String, dynamic>> _scans = [];
   List<Map<String, dynamic>> _bodyweight = [];
   Map<String, dynamic>? _muscle;
+  String _goal = 'maintain';
   bool _loading = true;
   int _metricTab = 0; // 0 BODY FAT, 1 WEIGHT, 2 SCORE
   int? _expandedScan;
@@ -46,12 +48,15 @@ class _BodyScreenState extends State<BodyScreen> {
       getPhysiqueScans(),
       getBodyweightHistory(),
       getMuscleBalance(),
+      getUserProfile(),
     ]);
     if (!mounted) return;
     setState(() {
       _scans = results[0] as List<Map<String, dynamic>>;
       _bodyweight = results[1] as List<Map<String, dynamic>>;
       _muscle = results[2] as Map<String, dynamic>?;
+      _goal = ((results[3] as Map<String, dynamic>?)?['goal'] as String?) ??
+          'maintain';
       _loading = false;
     });
   }
@@ -82,17 +87,31 @@ class _BodyScreenState extends State<BodyScreen> {
     ('Core', 'core_score'),
   ];
 
-  /// Muscle development for the latest scan (score × 10 → 0-100 display),
-  /// falling back to 30-day workout-volume balance when no scan exists.
+  bool get _hasScanScores =>
+      _latest != null &&
+      _muscleKeys.any((k) => _latest![k.$2] != null);
+
+  /// Muscle development from the latest scan, scored 0-10 per muscle.
+  /// Colors are ABSOLUTE (same scale as the color key and muscle map):
+  /// green 7+, gold 5-6.9, pink below 5 — so a "best" muscle that is still
+  /// objectively weak reads as weak. Falls back to 30-day training-volume
+  /// balance (relative, neutral color) when there's no scan.
   List<_MuscleScore> get _muscleScores {
     final scan = _latest;
     List<_MuscleScore> list;
-    if (scan != null) {
+    if (_hasScanScores) {
       list = [
         for (final (name, key) in _muscleKeys)
-          if (scan[key] != null)
-            _MuscleScore(name, ((scan[key] as num) * 10).round()),
+          if (scan![key] != null)
+            _MuscleScore(name, (scan[key] as num).toDouble(), fromScan: true),
       ];
+      for (final m in list) {
+        m.color = m.score >= 7
+            ? kGreen
+            : m.score >= 5
+                ? kGold
+                : kPink;
+      }
     } else {
       final groups = _muscle?['groups'] as Map<String, dynamic>? ?? {};
       if (groups.isEmpty) return const [];
@@ -103,16 +122,15 @@ class _BodyScreenState extends State<BodyScreen> {
         for (final e in groups.entries)
           _MuscleScore(
             _titleCase(e.key),
-            maxV > 0 ? ((e.value as num) / maxV * 100).round() : 0,
-          ),
+            maxV > 0 ? (e.value as num) / maxV * 10 : 0,
+            fromScan: false,
+          )..color = kCyan,
       ];
     }
     if (list.isEmpty) return list;
     list.sort((a, b) => b.score.compareTo(a.score));
-    // Colour by rank; the two weakest are flagged as lagging.
-    const palette = [kGreen, kGreen, kCyan, kBlue, kGold, kPink];
+    // The two weakest are the current focus areas.
     for (var i = 0; i < list.length; i++) {
-      list[i].color = palette[i.clamp(0, palette.length - 1)];
       list[i].lag = list.length > 2 && i >= list.length - 2;
     }
     return list;
@@ -276,7 +294,9 @@ class _BodyScreenState extends State<BodyScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
+        _scoreKey(),
+        const SizedBox(height: 12),
         _muscleCard(),
         const SizedBox(height: 16),
         _bfTrendCard(bfTrend, bfAllTime),
@@ -556,6 +576,51 @@ class _BodyScreenState extends State<BodyScreen> {
     );
   }
 
+  /// Color key for the muscle map and development bars.
+  Widget _scoreKey() {
+    Widget item(Color color, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+          ],
+        );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          children: [
+            item(kGreen, 'Strong (7+)'),
+            const SizedBox(width: 14),
+            item(kGold, 'Medium (5–6.9)'),
+            const SizedBox(width: 14),
+            item(kPink, 'Lagging (<5)'),
+            const SizedBox(width: 14),
+            item(Colors.white.withValues(alpha: 0.15), 'Not scanned'),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _muscleCard() {
     final scores = _muscleScores;
     return Container(
@@ -569,6 +634,19 @@ class _BodyScreenState extends State<BodyScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('MUSCLE DEVELOPMENT', style: kLabelSmall),
+          const SizedBox(height: 4),
+          Text(
+            _hasScanScores
+                ? 'Each muscle is scored 0–10 by your latest physique scan. '
+                    'Your overall score (/100) is roughly their average ×10.'
+                : 'No scan yet — this shows how your last 30 days of '
+                    'training volume is balanced across muscle groups.',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              height: 1.4,
+            ),
+          ),
           const SizedBox(height: 14),
           if (scores.isEmpty)
             Padding(
@@ -592,15 +670,19 @@ class _BodyScreenState extends State<BodyScreen> {
       child: Row(
         children: [
           SizedBox(
-            width: 88,
+            width: 96,
             child: Row(
               children: [
-                Text(
-                  m.name,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    m.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (m.lag) ...[
@@ -609,13 +691,13 @@ class _BodyScreenState extends State<BodyScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
-                      color: m.color.withValues(alpha: 0.18),
+                      color: kPink.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Text(
-                      'LAG',
+                    child: const Text(
+                      'FOCUS',
                       style: TextStyle(
-                        color: m.color,
+                        color: kPink,
                         fontSize: 7.5,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
@@ -629,7 +711,7 @@ class _BodyScreenState extends State<BodyScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: m.score / 100),
+              tween: Tween(begin: 0, end: (m.score / 10).clamp(0.0, 1.0)),
               duration: const Duration(milliseconds: 700),
               curve: Curves.easeOutCubic,
               builder: (_, v, _) => ClipRRect(
@@ -645,13 +727,13 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 24,
+            width: 38,
             child: Text(
-              '${m.score}',
+              m.fromScan ? '${m.score.round()}/10' : '${(m.score * 10).round()}%',
               textAlign: TextAlign.right,
               style: TextStyle(
                 color: AppColors.textSecondary,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -821,25 +903,17 @@ class _BodyScreenState extends State<BodyScreen> {
           (_dateLabel(s['created_at'] as String?), _score(s)!.toDouble()),
     ];
 
+    final emptyHint = switch (_metricTab) {
+      1 => 'Tap the WEIGHT card above to log your bodyweight — '
+          'two entries start the trend',
+      2 => 'Scan again to track your score over time',
+      _ => 'Scan again to track body fat over time',
+    };
+
     final series = switch (_metricTab) {
       1 => weightSeries,
       2 => scoreSeries,
       _ => bfSeries,
-    };
-    final color = switch (_metricTab) {
-      1 => kBlue,
-      2 => kLime,
-      _ => kPink,
-    };
-    final unit = switch (_metricTab) {
-      1 => ' lbs',
-      2 => '/100',
-      _ => '%',
-    };
-    final emptyHint = switch (_metricTab) {
-      1 => 'Log your bodyweight to start this trend',
-      2 => 'Scan again to track your score over time',
-      _ => 'Scan again to track body fat over time',
     };
 
     return Container(
@@ -861,34 +935,125 @@ class _BodyScreenState extends State<BodyScreen> {
             index: _metricTab,
             onChanged: (i) => setState(() => _metricTab = i),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SizedBox(
-              height: 140,
-              child: series.length >= 2
-                  ? _metricChart(series, color, unit)
-                  : Center(
+            child: series.length < 2
+                ? SizedBox(
+                    height: 140,
+                    child: Center(
                       child: Text(
                         emptyHint,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 12,
                         ),
                       ),
                     ),
-            ),
+                  )
+                : switch (_metricTab) {
+                    1 => _weightMetric(weightSeries),
+                    2 => _scoreMetric(scoreSeries),
+                    _ => _bfMetric(bfSeries),
+                  },
           ),
         ],
       ),
     );
   }
 
-  Widget _metricChart(List<(String, double)> series, Color color, String unit) {
+  /// Headline + takeaway + chart, shared frame for the three metric tabs.
+  Widget _metricBody({
+    required String headline,
+    required String takeaway,
+    required Color takeawayColor,
+    required Widget chart,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            headline,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          takeaway,
+          style: TextStyle(
+            color: takeawayColor,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(height: 130, child: chart),
+      ],
+    );
+  }
+
+  Widget _bfMetric(List<(String, double)> series) {
+    final change = series.last.$2 - series.first.$2;
+    return _metricBody(
+      headline: 'Now ${series.last.$2.toStringAsFixed(1)}% body fat',
+      takeaway:
+          '${change <= 0 ? '' : '+'}${change.toStringAsFixed(1)}% since your '
+          'first scan${change <= 0 ? ' — moving the right way' : ''}',
+      takeawayColor: change <= 0 ? kGreen : kPink,
+      chart: _metricLine(series, kPink, '%'),
+    );
+  }
+
+  Widget _weightMetric(List<(String, double)> series) {
+    final change = series.last.$2 - series.first.$2;
+    final g = _goal.toLowerCase();
+    final gaining = change > 0;
+    final matchesGoal = g.contains('bulk') || g.contains('muscle')
+        ? gaining
+        : g.contains('cut') || g.contains('lose')
+            ? !gaining
+            : true;
+    return _metricBody(
+      headline: 'Started ${series.first.$2.toStringAsFixed(1)} · '
+          'Now ${series.last.$2.toStringAsFixed(1)} lbs',
+      takeaway: '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)} lbs '
+          '(last 30 days)'
+          '${change.abs() < 0.05 ? '' : matchesGoal ? ' — on track for your goal' : ' — opposite of your goal'}',
+      takeawayColor:
+          change.abs() < 0.05 ? kCyan : (matchesGoal ? kGreen : kPink),
+      chart: _metricLine(
+        series,
+        change.abs() < 0.05 ? kCyan : (matchesGoal ? kGreen : kPink),
+        ' lbs',
+      ),
+    );
+  }
+
+  Widget _scoreMetric(List<(String, double)> series) {
+    final change = (series.last.$2 - series.first.$2).round();
+    return _metricBody(
+      headline: 'Latest score ${series.last.$2.round()}/100',
+      takeaway:
+          '${change >= 0 ? '+' : ''}$change vs your first scan across '
+          '${series.length} scans',
+      takeawayColor: change >= 0 ? kGreen : kPink,
+      chart: _scoreBars(series),
+    );
+  }
+
+  Widget _metricLine(List<(String, double)> series, Color color, String unit) {
     final values = series.map((e) => e.$2).toList();
     final minY = values.reduce((a, b) => a < b ? a : b);
     final maxY = values.reduce((a, b) => a > b ? a : b);
-    final pad = (maxY - minY) * 0.25 + 0.001;
+    final pad = (maxY - minY) * 0.25 + 0.3;
 
     return LineChart(
       LineChartData(
@@ -941,6 +1106,52 @@ class _BodyScreenState extends State<BodyScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Physique score as bars — one per scan, latest highlighted.
+  Widget _scoreBars(List<(String, double)> series) {
+    final maxVal =
+        series.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
+    return BarChart(
+      BarChartData(
+        maxY: (maxVal * 1.15).clamp(10, 100).toDouble(),
+        minY: 0,
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => AppColors.surfaceElevated,
+            getTooltipItem: (group, _, rod, _) => BarTooltipItem(
+              '${series[group.x].$1}\n${rod.toY.round()}/100',
+              TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        titlesData: const FlTitlesData(show: false),
+        barGroups: [
+          for (var i = 0; i < series.length; i++)
+            BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: series[i].$2,
+                  width: 14,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(4),
+                  ),
+                  color: i == series.length - 1
+                      ? kLime
+                      : kLime.withValues(alpha: 0.4),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -1249,50 +1460,117 @@ class _MuscleMapPainter extends CustomPainter {
 
   final Map<String, double?> scores;
 
-  Color _tint(String region) {
+  Color _tint(String region, [double alpha = 0.8]) {
     final v = scores[region];
     if (v == null) return Colors.white.withValues(alpha: 0.08);
-    if (v >= 7) return kGreen.withValues(alpha: 0.75);
-    if (v >= 5) return kGold.withValues(alpha: 0.75);
-    return kPink.withValues(alpha: 0.8);
+    if (v >= 7) return kGreen.withValues(alpha: alpha);
+    if (v >= 5) return kGold.withValues(alpha: alpha);
+    return kPink.withValues(alpha: alpha);
   }
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    Paint fill(String region) => Paint()..color = _tint(region);
+    Paint fill(String region, [double alpha = 0.8]) =>
+        Paint()..color = _tint(region, alpha);
     final neutral = Paint()..color = Colors.white.withValues(alpha: 0.10);
+    final divider = Paint()
+      ..color = kBgCard
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
 
     RRect rr(double l, double t, double r, double b, [double rad = 8]) =>
         RRect.fromLTRBR(l * w, t * h, r * w, b * h, Radius.circular(rad));
+    Offset o(double x, double y) => Offset(x * w, y * h);
 
-    // Head (neutral)
-    canvas.drawCircle(Offset(0.5 * w, 0.07 * h), 0.075 * h, neutral);
+    // ── Head & neck (neutral) ─────────────────────────────────────────
+    canvas.drawOval(
+      Rect.fromCenter(center: o(0.5, 0.055), width: 0.13 * w, height: 0.09 * h),
+      neutral,
+    );
+    canvas.drawRRect(rr(0.455, 0.09, 0.545, 0.125, 3), neutral);
 
-    // Shoulders — two caps beside the upper torso
-    canvas.drawCircle(
-        Offset(0.26 * w, 0.20 * h), 0.055 * h, fill('shoulders'));
-    canvas.drawCircle(
-        Offset(0.74 * w, 0.20 * h), 0.055 * h, fill('shoulders'));
+    // ── Traps (back score) — sloping band from neck to shoulders ─────
+    final traps = Path()
+      ..moveTo(0.36 * w, 0.165 * h)
+      ..lineTo(0.455 * w, 0.125 * h)
+      ..lineTo(0.545 * w, 0.125 * h)
+      ..lineTo(0.64 * w, 0.165 * h)
+      ..close();
+    canvas.drawPath(traps, fill('back'));
 
-    // Chest — upper torso block
-    canvas.drawRRect(rr(0.32, 0.16, 0.68, 0.32), fill('chest'));
+    // ── Delts (shoulders) — rounded caps ──────────────────────────────
+    canvas.drawOval(
+      Rect.fromCenter(center: o(0.265, 0.185), width: 0.15 * w, height: 0.07 * h),
+      fill('shoulders'),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: o(0.735, 0.185), width: 0.15 * w, height: 0.07 * h),
+      fill('shoulders'),
+    );
 
-    // Core — lower torso block
-    canvas.drawRRect(rr(0.34, 0.33, 0.66, 0.50), fill('core'));
+    // ── Chest — two pecs with a sternum line ─────────────────────────
+    canvas.drawRRect(rr(0.335, 0.165, 0.495, 0.30, 10), fill('chest'));
+    canvas.drawRRect(rr(0.505, 0.165, 0.665, 0.30, 10), fill('chest'));
 
-    // Arms — hanging limbs
-    canvas.drawRRect(rr(0.16, 0.26, 0.27, 0.52, 6), fill('arms'));
-    canvas.drawRRect(rr(0.73, 0.26, 0.84, 0.52, 6), fill('arms'));
+    // ── Core — abs block with segment lines ──────────────────────────
+    final core = rr(0.36, 0.315, 0.64, 0.50, 9);
+    canvas.drawRRect(core, fill('core'));
+    canvas.drawLine(o(0.5, 0.325), o(0.5, 0.49), divider);
+    canvas.drawLine(o(0.375, 0.375), o(0.625, 0.375), divider);
+    canvas.drawLine(o(0.375, 0.435), o(0.625, 0.435), divider);
 
-    // Legs — two columns
-    canvas.drawRRect(rr(0.34, 0.52, 0.485, 0.95, 6), fill('legs'));
-    canvas.drawRRect(rr(0.515, 0.52, 0.66, 0.95, 6), fill('legs'));
+    // ── Arms — upper arm + forearm with an elbow break, angled out ───
+    void arm(bool left) {
+      final sign = left ? -1.0 : 1.0;
+      final sx = 0.5 + sign * 0.235;
+      // Upper arm (biceps)
+      final upper = Path()
+        ..moveTo((sx - 0.045) * w, 0.215 * h)
+        ..lineTo((sx + 0.045) * w, 0.215 * h)
+        ..lineTo((sx + sign * 0.03 + 0.04) * w, 0.36 * h)
+        ..lineTo((sx + sign * 0.03 - 0.04) * w, 0.36 * h)
+        ..close();
+      canvas.drawPath(upper, fill('arms'));
+      // Forearm — slightly narrower, lighter tint for depth
+      final fx = sx + sign * 0.035;
+      final fore = Path()
+        ..moveTo((fx - 0.033) * w, 0.375 * h)
+        ..lineTo((fx + 0.033) * w, 0.375 * h)
+        ..lineTo((fx + sign * 0.02 + 0.025) * w, 0.52 * h)
+        ..lineTo((fx + sign * 0.02 - 0.025) * w, 0.52 * h)
+        ..close();
+      canvas.drawPath(fore, fill('arms', 0.55));
+    }
 
-    // Back isn't visible from the front — show it as a thin band behind
-    // the neck/traps so the score still appears on the map.
-    canvas.drawRRect(rr(0.36, 0.125, 0.64, 0.155, 4), fill('back'));
+    arm(true);
+    arm(false);
+
+    // ── Legs — quads + calves with a knee break ──────────────────────
+    void leg(bool left) {
+      final sign = left ? -1.0 : 1.0;
+      final cx = 0.5 + sign * 0.075;
+      // Quad — tapers toward the knee
+      final quad = Path()
+        ..moveTo((cx - 0.07) * w, 0.515 * h)
+        ..lineTo((cx + 0.07) * w, 0.515 * h)
+        ..lineTo((cx + 0.05) * w, 0.735 * h)
+        ..lineTo((cx - 0.05) * w, 0.735 * h)
+        ..close();
+      canvas.drawPath(quad, fill('legs'));
+      // Calf — smaller, lighter for depth
+      final calf = Path()
+        ..moveTo((cx - 0.045) * w, 0.755 * h)
+        ..lineTo((cx + 0.045) * w, 0.755 * h)
+        ..lineTo((cx + 0.03) * w, 0.955 * h)
+        ..lineTo((cx - 0.03) * w, 0.955 * h)
+        ..close();
+      canvas.drawPath(calf, fill('legs', 0.55));
+    }
+
+    leg(true);
+    leg(false);
   }
 
   @override

@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 import 'screens/today_screen.dart' show TodayScreen;
 import 'login_screen.dart';
-import 'screens/onboarding/goal_picker_screen.dart';
+import 'screens/onboarding/onboarding_flow.dart';
 import 'screens/body/body_screen.dart';
 import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
@@ -108,7 +108,7 @@ class _OnboardingGateState extends State<_OnboardingGate> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (!_onboardingDone!) {
-      return GoalPickerScreen(
+      return OnboardingFlow(
         onComplete: () => setState(() => _onboardingDone = true),
       );
     }

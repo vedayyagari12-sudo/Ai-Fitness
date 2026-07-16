@@ -287,15 +287,19 @@ Future<List<Map<String, dynamic>>> getBodyweightHistory() async {
   }
 }
 
-Future<bool> deleteAccount() async {
+/// Returns null on failure; otherwise the backend's result including
+/// `auth_user_deleted` (false when the server lacks the service-role key,
+/// meaning the login credential still exists).
+Future<Map<String, dynamic>?> deleteAccount() async {
   try {
     final response = await http.delete(
       Uri.parse('$baseUrl/account'),
       headers: getHeaders(),
     );
-    return response.statusCode == 200;
+    if (response.statusCode != 200) return null;
+    return jsonDecode(response.body) as Map<String, dynamic>;
   } catch (e) {
-    return false;
+    return null;
   }
 }
 

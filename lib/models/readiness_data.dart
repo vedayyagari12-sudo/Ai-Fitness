@@ -1,11 +1,12 @@
 /// Data backing the readiness card on the TODAY screen.
-/// Ring progresses are 0..1; score is the % of the weekly workout goal met.
+/// Ring progresses are 0..1; score blends weekly training progress (60%),
+/// calorie fueling (25%) and protein intake (15%).
 class ReadinessData {
   const ReadinessData({
     required this.score,
     required this.caloriesProgress,
     required this.proteinProgress,
-    required this.bodyFatProgress,
+    required this.sessionsProgress,
     required this.fueledValue,
     required this.caloriesLabel,
     required this.loadValue,
@@ -14,6 +15,9 @@ class ReadinessData {
     required this.proteinTarget,
     required this.bodyFatValue,
     required this.bodyFatDelta,
+    required this.trainingDetail,
+    required this.fuelDetail,
+    required this.proteinDetail,
   });
 
   // Center
@@ -22,7 +26,7 @@ class ReadinessData {
   // Ring sweeps (0..1)
   final double caloriesProgress; // outer (lime)
   final double proteinProgress; // middle (cyan)
-  final double bodyFatProgress; // inner (pink)
+  final double sessionsProgress; // inner (pink) — weekly sessions vs goal
 
   // Corner stats
   final String fueledValue; // "84%"
@@ -34,11 +38,16 @@ class ReadinessData {
   final String bodyFatValue; // "18.2%"
   final String bodyFatDelta; // "-0.6%"
 
+  // Plain-English detail lines for the "how is this calculated?" sheet
+  final String trainingDetail; // "1 of 4 sessions this week"
+  final String fuelDetail; // "634 of 2,200 kcal today"
+  final String proteinDetail; // "19g of 126g today"
+
   static const empty = ReadinessData(
     score: 0,
     caloriesProgress: 0,
     proteinProgress: 0,
-    bodyFatProgress: 0,
+    sessionsProgress: 0,
     fueledValue: '0%',
     caloriesLabel: '0 kcal',
     loadValue: '0',
@@ -47,5 +56,8 @@ class ReadinessData {
     proteinTarget: 'of —',
     bodyFatValue: '—',
     bodyFatDelta: '',
+    trainingDetail: 'No sessions yet this week',
+    fuelDetail: 'Nothing logged today',
+    proteinDetail: 'Nothing logged today',
   );
 }

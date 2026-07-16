@@ -17,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoading = false;
   bool showPasswordStep = false;
   String message = '';
+  bool showResend = false; // offer "resend verification email"
 
   Future<void> _continueWithEmail() async {
     final email = emailController.text.trim();
@@ -34,14 +35,29 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       isLoading = true;
       message = '';
+      showResend = false;
     });
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
+    } on AuthException catch (e) {
+      final msg = e.message.toLowerCase();
+      setState(() {
+        if (msg.contains('not confirmed')) {
+          message = '❌ Your email isn\'t verified yet.';
+          showResend = true;
+        } else if (msg.contains('invalid')) {
+          message = '❌ Wrong email or password.';
+        } else {
+          message = '❌ ${e.message}';
+        }
+      });
     } catch (e) {
-      setState(() => message = '❌ ${e.toString()}');
+      setState(
+        () => message = '❌ Could not sign in — check your connection.',
+      );
     }
     if (mounted) setState(() => isLoading = false);
   }
@@ -50,15 +66,65 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       isLoading = true;
       message = '';
+      showResend = false;
     });
     try {
-      await Supabase.instance.client.auth.signUp(
+      final res = await Supabase.instance.client.auth.signUp(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-      setState(() => message = '✅ Account created! Check email to verify.');
+      setState(() {
+        // session == null means Supabase requires email confirmation.
+        if (res.session == null) {
+          message = '✅ Account created! Check your email to verify.';
+          showResend = true;
+        } else {
+          message = '✅ Account created!';
+        }
+      });
+    } on AuthException catch (e) {
+      final msg = e.message.toLowerCase();
+      setState(() {
+        if (msg.contains('already registered') ||
+            msg.contains('already exists')) {
+          message =
+              '❌ This email already has an account. Sign in instead — or '
+              'if you never verified it, resend the email below.';
+          showResend = true;
+        } else {
+          message = '❌ ${e.message}';
+        }
+      });
     } catch (e) {
-      setState(() => message = '❌ ${e.toString()}');
+      setState(
+        () => message = '❌ Could not sign up — check your connection.',
+      );
+    }
+    if (mounted) setState(() => isLoading = false);
+  }
+
+  /// Re-sends the signup verification email — Supabase does not resend it
+  /// automatically when a signup is repeated for an unconfirmed address.
+  Future<void> _resendVerification() async {
+    final email = emailController.text.trim();
+    if (email.isEmpty) return;
+    setState(() => isLoading = true);
+    try {
+      await Supabase.instance.client.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
+      setState(
+        () => message = '✅ Verification email re-sent — check your inbox.',
+      );
+    } on AuthException catch (e) {
+      setState(
+        () => message = e.message.toLowerCase().contains('rate')
+            ? '❌ Too many requests — wait a minute and try again.'
+            : '❌ ${e.message}',
+      );
+    } catch (_) {
+      setState(() => message = '❌ Could not resend — try again.');
     }
     if (mounted) setState(() => isLoading = false);
   }
@@ -203,6 +269,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
+                      if (showResend)
+                        TextButton(
+                          onPressed: isLoading ? null : _resendVerification,
+                          child: const Text(
+                            'Resend verification email',
+                            style: TextStyle(
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
                     ],
                     const SizedBox(height: 24),
                     Row(

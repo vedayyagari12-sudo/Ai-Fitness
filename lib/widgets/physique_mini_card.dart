@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
+/// Compact physique summary on TODAY: body fat, latest scan score, change
+/// vs the previous scan and a sparkline once there's enough history.
 class PhysiqueMiniCard extends StatelessWidget {
   const PhysiqueMiniCard({
     super.key,
     this.bodyFat,
+    this.score,
+    this.scanCount = 0,
     this.delta,
     this.deltaPositive = true,
     this.points = const [],
@@ -14,7 +18,9 @@ class PhysiqueMiniCard extends StatelessWidget {
 
   /// Latest body fat %, null when the user has no scans yet.
   final double? bodyFat;
-  final String? delta; // "-0.6% this week"
+  final int? score; // latest overall physique score /100
+  final int scanCount;
+  final String? delta; // "-0.6% vs last scan"
   final bool deltaPositive; // true = trending the right way
   final List<double> points; // body-fat sparkline (last scans)
 
@@ -30,7 +36,16 @@ class PhysiqueMiniCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('PHYSIQUE', style: kLabelSmall),
+          Row(
+            children: [
+              Expanded(child: Text('PHYSIQUE', style: kLabelSmall)),
+              if (scanCount > 0)
+                Text(
+                  '$scanCount scan${scanCount == 1 ? '' : 's'}',
+                  style: const TextStyle(fontSize: 9, color: kTextMuted),
+                ),
+            ],
+          ),
           const SizedBox(height: 4),
           if (bodyFat == null) ...[
             const Text(
@@ -43,34 +58,79 @@ class PhysiqueMiniCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Scan your physique to track body fat',
+              'Scan your physique in the SCAN tab to track body fat '
+              'and your score',
               style: TextStyle(fontSize: 11, color: kTextMuted),
             ),
-            const SizedBox(height: 8),
-            const SizedBox(height: 32),
           ] else ...[
-            Text(
-              '${bodyFat!.toStringAsFixed(1)}%',
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: kPink,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${bodyFat!.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: kPink,
+                    height: 1.0,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 1),
+                  child: Text(
+                    'body fat',
+                    style: TextStyle(fontSize: 9, color: kTextMuted),
+                  ),
+                ),
+              ],
             ),
-            if (delta != null)
+            if (score != null) ...[
+              const SizedBox(height: 3),
+              Row(
+                children: [
+                  const Icon(Icons.star_rounded, size: 11, color: kLime),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Score $score/100',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: kLime,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (delta != null) ...[
+              const SizedBox(height: 2),
               Text(
                 delta!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 11,
-                  color: deltaPositive ? AppColors.success : AppColors.danger,
+                  fontSize: 10,
+                  color: deltaPositive ? kGreen : kPink,
                 ),
               ),
+            ],
             const SizedBox(height: 8),
             SizedBox(
-              height: 32,
+              height: 30,
               child: points.length >= 2
                   ? LineChart(_sparklineData())
-                  : const SizedBox.shrink(),
+                  : Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        scanCount <= 1
+                            ? 'Scan again to unlock your trend'
+                            : 'Trend appears after another scan',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: kTextMuted,
+                        ),
+                      ),
+                    ),
             ),
           ],
         ],
@@ -79,7 +139,12 @@ class PhysiqueMiniCard extends StatelessWidget {
   }
 
   LineChartData _sparklineData() {
+    final minY = points.reduce((a, b) => a < b ? a : b);
+    final maxY = points.reduce((a, b) => a > b ? a : b);
+    final pad = (maxY - minY) * 0.3 + 0.3;
     return LineChartData(
+      minY: minY - pad,
+      maxY: maxY + pad,
       gridData: const FlGridData(show: false),
       titlesData: const FlTitlesData(show: false),
       borderData: FlBorderData(show: false),
@@ -97,6 +162,14 @@ class PhysiqueMiniCard extends StatelessWidget {
           color: kPink,
           barWidth: 2,
           dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(
+            show: true,
+            gradient: LinearGradient(
+              colors: [kPink.withValues(alpha: 0.25), Colors.transparent],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
         ),
       ],
     );

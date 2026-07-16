@@ -68,6 +68,8 @@ class RecentScanThumb extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -76,6 +78,8 @@ class RecentScanThumb extends StatelessWidget {
           ),
           Text(
             subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 10, color: kTextMuted),
           ),
         ],
