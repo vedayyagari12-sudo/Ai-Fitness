@@ -256,12 +256,16 @@ def build_dashboard_charts(goal: str, data: dict) -> list[dict]:
 @app.get("/streak/{user_id}")
 async def get_streak(
     user_id: str,
+    tz: int = 0,  # client's UTC offset in minutes (east positive)
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     user=Depends(verify_token),
 ):
     ensure_user_access(user_id, user)
-    today = date.today()
+    # Timestamps are stored in UTC; shift into the CLIENT's local day so an
+    # evening workout doesn't land on "tomorrow" and break the streak.
+    offset = timedelta(minutes=tz)
+    today = (datetime.now(timezone.utc) + offset).date()
 
     # Collect active dates from workouts table (PostgreSQL)
     workout_rows = (
@@ -269,7 +273,7 @@ async def get_streak(
         .filter(Workout.user_id == user_id)
         .all()
     )
-    workout_dates = {r[0].date() for r in workout_rows if r[0]}
+    workout_dates = {(r[0] + offset).date() for r in workout_rows if r[0]}
 
     # Collect active dates from calorie_logs table (Supabase)
     calorie_rows = await fetch_supabase_table(
@@ -282,7 +286,12 @@ async def get_streak(
         raw = row.get("created_at")
         if raw:
             try:
-                calorie_dates.add(date.fromisoformat(raw[:10]))
+                stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+                calorie_dates.add(
+                    (stamp.astimezone(timezone.utc) + offset).date()
+                )
             except ValueError:
                 pass
 

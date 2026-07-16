@@ -151,20 +151,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Text(
-                        'BUILT FOR SERIOUS ATHLETES',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2.0,
-                        ),
-                      ),
-                    ),
-
                     const SizedBox(height: 48),
 
                     // Inputs and Main Form section with cross-fade animation

@@ -170,7 +170,7 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
                     child: TextField(
                       controller: _weightCtrl,
                       decoration:
-                          const InputDecoration(labelText: 'Weight (kg)'),
+                          const InputDecoration(labelText: 'Weight (lbs)'),
                       keyboardType: TextInputType.number,
                     ),
                   ),

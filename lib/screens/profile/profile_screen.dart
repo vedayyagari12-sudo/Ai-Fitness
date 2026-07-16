@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../api_service.dart';
 import '../../services/app_state_service.dart';
+import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/snackbar.dart';
 
@@ -96,8 +97,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String key, {
     bool decimal = false,
     String? suffix,
+    // Optional unit conversion between what's stored and what's shown
+    // (e.g. weight is stored in kg but entered/displayed in lbs).
+    double Function(double stored)? storeToDisplay,
+    double Function(double entered)? displayToStore,
   }) async {
-    final ctrl = TextEditingController(text: '${_profile[key] ?? ''}');
+    final stored = (_profile[key] as num?)?.toDouble();
+    final initial = stored == null
+        ? ''
+        : storeToDisplay != null
+            ? storeToDisplay(stored).toStringAsFixed(decimal ? 1 : 0)
+            : '${_profile[key]}';
+    final ctrl = TextEditingController(text: initial);
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -135,10 +146,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (saved == true) {
-      final value = decimal
+      final num? value = decimal
           ? double.tryParse(ctrl.text)
           : int.tryParse(ctrl.text);
-      if (value != null) await _save(key, value);
+      if (value != null) {
+        final toStore = displayToStore != null
+            ? double.parse(
+                displayToStore(value.toDouble()).toStringAsFixed(2),
+              )
+            : value;
+        await _save(key, toStore);
+      }
     }
   }
 
@@ -339,9 +357,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _detailRow(
                     'Weight',
-                    _display('weight_kg', suffix: 'kg'),
-                    () => _editNumber('Weight', 'weight_kg',
-                        decimal: true, suffix: 'kg'),
+                    _profile['weight_kg'] != null
+                        ? '${lbsLabel(kgToLbs(_profile['weight_kg'] as num))} lbs'
+                        : 'Set',
+                    () => _editNumber(
+                      'Weight',
+                      'weight_kg',
+                      decimal: true,
+                      suffix: 'lbs',
+                      storeToDisplay: kgToLbs,
+                      displayToStore: lbsToKg,
+                    ),
                   ),
                   _detailRow(
                     'Equipment',

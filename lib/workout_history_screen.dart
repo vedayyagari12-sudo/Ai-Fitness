@@ -353,7 +353,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
     final detail = <String>[];
     if (sets != null && reps != null) detail.add('$sets × $reps');
-    if (weight != null) detail.add('@ $weight kg');
+    if (weight != null) detail.add('@ $weight lbs');
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),

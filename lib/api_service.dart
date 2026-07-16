@@ -114,8 +114,10 @@ Future<Map<String, dynamic>?> getStreak() async {
   final userId = getCurrentUserId();
   if (userId == null) return null;
   try {
+    // Pass the device's UTC offset so "today" means the user's local day.
+    final tz = DateTime.now().timeZoneOffset.inMinutes;
     final response = await http.get(
-      Uri.parse('$baseUrl/streak/$userId'),
+      Uri.parse('$baseUrl/streak/$userId?tz=$tz'),
       headers: getHeaders(),
     );
     if (response.statusCode == 200) {
@@ -157,6 +159,26 @@ Future<Map<String, dynamic>?> getTodayBodyweight() async {
     return null;
   } catch (e) {
     return null;
+  }
+}
+
+/// Weekly training volume/session totals, newest week first
+/// (backend GET /users/{id}/summary/weekly).
+Future<List<Map<String, dynamic>>> getWeeklySummary({int weeks = 8}) async {
+  final userId = getCurrentUserId();
+  if (userId == null) return [];
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/users/$userId/summary/weekly?weeks=$weeks'),
+      headers: getHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return (jsonDecode(response.body) as List)
+          .cast<Map<String, dynamic>>();
+    }
+    return [];
+  } catch (e) {
+    return [];
   }
 }
 

@@ -121,8 +121,15 @@ class _AiSessionViewState extends State<AiSessionView> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         setState(() {
-          workout = data;
           _parseMainExercises(data);
+          if (mainExercises.isEmpty) {
+            // A session with no parseable exercises would render as an
+            // empty shell — treat it as a failed generation instead.
+            workout = null;
+            error = 'Could not build your session. Pull to retry.';
+          } else {
+            workout = data;
+          }
         });
       } else {
         setState(() => error = 'Could not build your session. Pull to retry.');
@@ -234,25 +241,19 @@ class _AiSessionViewState extends State<AiSessionView> {
   bool _isFocus(_GeneratedExercise e) =>
       _lagging.contains(_canon(e.muscleGroup));
 
-  /// % of total work-sets in strength / hypertrophy / pump rep ranges.
-  (int, int, int) get _intensityMix {
-    var strength = 0, hyper = 0, pump = 0;
+  /// Unique canonical muscle groups this session hits, in plan order.
+  List<String> get _targetedGroups {
+    final seen = <String>{};
+    final groups = <String>[];
     for (final e in mainExercises) {
-      final s = e.sets <= 0 ? 1 : e.sets;
-      if (e.reps <= 6) {
-        strength += s;
-      } else if (e.reps <= 12) {
-        hyper += s;
-      } else {
-        pump += s;
-      }
+      final g = _canon(e.muscleGroup);
+      if (g.isNotEmpty && seen.add(g)) groups.add(g);
     }
-    final total = strength + hyper + pump;
-    if (total == 0) return (0, 0, 0);
-    final a = (strength / total * 100).round();
-    final b = (hyper / total * 100).round();
-    return (a, b, 100 - a - b);
+    return groups;
   }
+
+  int get _totalSets =>
+      mainExercises.fold(0, (sum, e) => sum + (e.sets <= 0 ? 1 : e.sets));
 
   String get _whyText {
     final fromBackend = (workout?['why_this_session'] as String?)?.trim();
@@ -345,7 +346,6 @@ class _AiSessionViewState extends State<AiSessionView> {
     final name = (workout!['workout_name'] as String?)?.trim();
     final focus = (workout!['focus'] as String?) ?? _autoFocus;
     final duration = (workout!['duration_minutes'] as num?)?.toInt() ?? 60;
-    final mix = _intensityMix;
 
     final children = <Widget>[
       _header(focus, name),
@@ -368,7 +368,7 @@ class _AiSessionViewState extends State<AiSessionView> {
       const SizedBox(height: 6),
       ..._planRows(),
       const SizedBox(height: 18),
-      _intensityCard(mix),
+      _targetsCard(),
       const SizedBox(height: 20),
       _sessionButton(),
       const SizedBox(height: 28),
@@ -427,41 +427,50 @@ class _AiSessionViewState extends State<AiSessionView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  color: valueColor ?? AppColors.textPrimary,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                  height: 1.0,
-                ),
-              ),
-              if (unit.isNotEmpty) ...[
-                const SizedBox(width: 3),
+          // FittedBox keeps large values from overflowing the narrow
+          // pill on small phone widths (~360px).
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
                 Text(
-                  unit,
+                  value,
                   style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    color: valueColor ?? AppColors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -1,
+                    height: 1.0,
                   ),
                 ),
+                if (unit.isNotEmpty) ...[
+                  const SizedBox(width: 3),
+                  Text(
+                    unit,
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.0,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+              ),
             ),
           ),
         ],
@@ -657,8 +666,12 @@ class _AiSessionViewState extends State<AiSessionView> {
     );
   }
 
-  Widget _intensityCard((int, int, int) mix) {
-    final (s, h, p) = mix;
+  /// What this session actually hits: muscle-group pills (focus areas in
+  /// pink) plus a plain-English set count. Always accurate — derived from
+  /// the plan itself, unlike the old rep-range intensity guess.
+  Widget _targetsCard() {
+    final groups = _targetedGroups;
+    if (groups.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -669,69 +682,51 @@ class _AiSessionViewState extends State<AiSessionView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _label('INTENSITY MIX'),
+          _label('THIS SESSION TARGETS'),
           const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Row(
-              children: [
-                if (s > 0)
-                  Expanded(
-                    flex: s,
-                    child: Container(height: 10, color: kBlue),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final g in groups)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
                   ),
-                if (h > 0)
-                  Expanded(
-                    flex: h,
-                    child: Container(height: 10, color: kGold),
+                  decoration: BoxDecoration(
+                    color: _lagging.contains(g)
+                        ? kPink.withValues(alpha: 0.15)
+                        : AppColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _lagging.contains(g)
+                          ? kPink.withValues(alpha: 0.5)
+                          : AppColors.border,
+                    ),
                   ),
-                if (p > 0)
-                  Expanded(
-                    flex: p,
-                    child: Container(height: 10, color: kPink),
+                  child: Text(
+                    _titleCase(g),
+                    style: TextStyle(
+                      color: _lagging.contains(g)
+                          ? kPink
+                          : AppColors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              _mixLegend(kBlue, 'Strength', s),
-              const Spacer(),
-              _mixLegend(kGold, 'Hypertrophy', h),
-              const Spacer(),
-              _mixLegend(kPink, 'Pump', p),
-            ],
+          Text(
+            '$_totalSets working sets across ${groups.length} '
+            'muscle group${groups.length == 1 ? '' : 's'}'
+            '${_lagging.isNotEmpty ? ' — extra volume on your focus areas' : ''}',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _mixLegend(Color c, String label, int pct) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          '$pct%',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
     );
   }
 

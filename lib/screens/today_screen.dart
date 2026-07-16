@@ -7,6 +7,7 @@ import '../models/readiness_data.dart';
 import '../services/nav_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import '../utils/units.dart';
 import '../widgets/physique_mini_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/recent_scan_thumb.dart';
@@ -27,6 +28,7 @@ class _TodayScreenState extends State<TodayScreen> {
   bool _loading = true;
   Map<String, dynamic>? _dash;
   Map<String, dynamic>? _streak;
+  List<Map<String, dynamic>> _weeklySummary = [];
 
   @override
   void initState() {
@@ -42,11 +44,16 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Future<void> _load() async {
-    final results = await Future.wait([getDashboard(), getStreak()]);
+    final results = await Future.wait([
+      getDashboard(),
+      getStreak(),
+      getWeeklySummary(),
+    ]);
     if (!mounted) return;
     setState(() {
-      _dash = results[0];
-      _streak = results[1];
+      _dash = results[0] as Map<String, dynamic>?;
+      _streak = results[1] as Map<String, dynamic>?;
+      _weeklySummary = (results[2] as List).cast<Map<String, dynamic>>();
       _loading = false;
     });
   }
@@ -117,16 +124,56 @@ class _TodayScreenState extends State<TodayScreen> {
     return '$focus Session';
   }
 
-  TrendSeries _series(String key, String unit, {int decimals = 1}) {
+  /// Raw trend series as sent by the backend (zeros preserved — for the
+  /// calorie chart a zero day means "nothing logged" and must stay visible).
+  List<double> _rawTrendValues(String key) {
     final trends = (_dash?['trends'] as Map<String, dynamic>?) ?? {};
     final entry = (trends[key] as Map<String, dynamic>?) ?? {};
-    final values = ((entry['values'] as List?) ?? [])
+    return ((entry['values'] as List?) ?? [])
         .map((v) => (v as num).toDouble())
         .toList();
-    // Backend sends [0.0] sentinels when there is no data — treat as empty.
-    final real = values.where((v) => v != 0.0).isEmpty ? <double>[] : values;
-    return TrendSeries(values: real, unit: unit, decimals: decimals);
   }
+
+  /// Trend series with the backend's all-zero "[0.0]" sentinel treated
+  /// as no data at all.
+  List<double> _trendValues(String key) {
+    final values = _rawTrendValues(key);
+    return values.where((v) => v != 0.0).isEmpty ? <double>[] : values;
+  }
+
+  List<String> get _dayLabels {
+    final trends = (_dash?['trends'] as Map<String, dynamic>?) ?? {};
+    final entry = (trends['calories'] as Map<String, dynamic>?) ?? {};
+    return ((entry['labels'] as List?) ?? []).cast<String>();
+  }
+
+  /// Daily calorie target: goal-based estimate from bodyweight
+  /// (bulk ×16, cut ×12, maintain ×14 kcal per lb), falling back to the
+  /// backend's TDEE when no weight is known.
+  double get _calorieTarget {
+    final weights = _trendValues('weight');
+    final weightKg =
+        weights.isNotEmpty ? weights.last : _num(_stats['weight']);
+    if (weightKg > 0) {
+      final lbs = kgToLbs(weightKg);
+      final g = _goal.toLowerCase();
+      final mult = g.contains('bulk') || g.contains('muscle')
+          ? 16
+          : g.contains('cut') || g.contains('lose')
+              ? 12
+              : 14;
+      return (lbs * mult).roundToDouble();
+    }
+    final backend = _num(_stats['calorie_target']);
+    return backend > 0 ? backend : 2200;
+  }
+
+  /// Weekly training volume in lbs lifted, oldest → newest (up to 8 weeks).
+  /// Backend returns newest-first.
+  List<double> get _weeklyVolume => [
+        for (final w in _weeklySummary.reversed)
+          (w['total_volume'] as num?)?.toDouble() ?? 0.0,
+      ];
 
   List<double> get _bfPoints {
     final charts = (_dash?['charts'] as List?) ?? [];
@@ -172,9 +219,11 @@ class _TodayScreenState extends State<TodayScreen> {
       const SizedBox(height: 12),
       TrendCard(
         goal: _goal,
-        weight: _series('weight', 'kg'),
-        calories: _series('calories', 'kcal', decimals: 0),
-        volume: _series('volume', 'kg', decimals: 0),
+        weightLbs: [for (final kg in _trendValues('weight')) kgToLbs(kg)],
+        dailyCalories: _rawTrendValues('calories'),
+        dayLabels: _dayLabels,
+        calorieTarget: _calorieTarget,
+        weeklyVolume: _weeklyVolume,
       ),
       const SizedBox(height: 12),
       Row(
@@ -249,7 +298,9 @@ class _TodayScreenState extends State<TodayScreen> {
             : 'Good evening';
 
     final streakCount = (_streak?['current_streak'] as num?)?.toInt() ?? 0;
-    final keptToday = _streak?['activity_today'] == true;
+    // activity_today is a list of activity kinds (["workout", "meal"]).
+    final keptToday = ((_streak?['activity_today'] as List?) ?? []).isNotEmpty;
+    final atRisk = _streak?['streak_at_risk'] == true && streakCount > 0;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -272,7 +323,11 @@ class _TodayScreenState extends State<TodayScreen> {
         Row(
           children: [
             if (streakCount > 0) ...[
-              StreakChip(count: streakCount, isKeptToday: keptToday),
+              StreakChip(
+                count: streakCount,
+                isKeptToday: keptToday,
+                atRisk: atRisk,
+              ),
               const SizedBox(width: 8),
             ],
             GestureDetector(

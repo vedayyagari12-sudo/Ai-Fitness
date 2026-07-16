@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../api_service.dart';
 import '../../services/nav_service.dart';
+import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
@@ -226,7 +227,19 @@ class _BodyScreenState extends State<BodyScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Expanded(flex: 5, child: _BodyRenderCard()),
+              Expanded(
+                flex: 5,
+                child: _MuscleMapCard(
+                  scores: {
+                    for (final (name, key) in _muscleKeys)
+                      name.toLowerCase():
+                          (_latest?[key] as num?)?.toDouble(),
+                  },
+                  scanDate: _latest != null
+                      ? _dateLabel(_latest!['created_at'] as String?)
+                      : null,
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 flex: 6,
@@ -395,12 +408,14 @@ class _BodyScreenState extends State<BodyScreen> {
     );
   }
 
-  /// Bottom sheet to log today's bodyweight — feeds the WEIGHT trend charts.
+  /// Bottom sheet to log today's bodyweight in lbs — the database keeps kg,
+  /// so we convert on save. Feeds the WEIGHT trend charts.
   Future<void> _logWeightSheet() async {
+    final lastKg = _bodyweight.isNotEmpty
+        ? (_bodyweight.last['weight_kg'] as num?)?.toDouble()
+        : null;
     final ctrl = TextEditingController(
-      text: _bodyweight.isNotEmpty
-          ? '${(_bodyweight.last['weight_kg'] as num?)?.toDouble() ?? ''}'
-          : '',
+      text: lastKg != null ? lbsLabel(kgToLbs(lastKg)) : '',
     );
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -427,7 +442,7 @@ class _BodyScreenState extends State<BodyScreen> {
               autofocus: true,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(suffixText: 'kg'),
+              decoration: const InputDecoration(suffixText: 'lbs'),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -439,15 +454,16 @@ class _BodyScreenState extends State<BodyScreen> {
       ),
     );
     if (saved != true || !mounted) return;
-    final kg = double.tryParse(ctrl.text);
-    if (kg == null || kg <= 0) {
+    final lbs = double.tryParse(ctrl.text);
+    if (lbs == null || lbs <= 0) {
       AppSnackbar.error(context, 'Enter a valid weight');
       return;
     }
-    final resp = await logBodyweight(kg);
+    final resp = await logBodyweight(lbsToKg(lbs));
     if (!mounted) return;
     if (resp != null && resp['error'] == null) {
       AppSnackbar.success(context, 'Weight logged');
+      triggerTodayRefresh();
       _load();
     } else {
       AppSnackbar.error(context, 'Could not save weight — try again');
@@ -501,13 +517,21 @@ class _BodyScreenState extends State<BodyScreen> {
                   height: 1.0,
                 ),
               ),
-              const Spacer(),
-              Text(
-                '$arrow$deltaStr',
-                style: TextStyle(
-                  color: deltaColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
+              const SizedBox(width: 6),
+              // Flexible + scale-down keeps the delta from overflowing
+              // the narrow card on small phone widths.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '$arrow$deltaStr',
+                    style: TextStyle(
+                      color: deltaColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -788,7 +812,7 @@ class _BodyScreenState extends State<BodyScreen> {
       for (final w in _bodyweight)
         (
           _dateLabel(w['created_at'] as String?),
-          (w['weight_kg'] as num?)?.toDouble() ?? 0,
+          kgToLbs((w['weight_kg'] as num?) ?? 0),
         ),
     ];
     final scoreSeries = <(String, double)>[
@@ -808,7 +832,7 @@ class _BodyScreenState extends State<BodyScreen> {
       _ => kPink,
     };
     final unit = switch (_metricTab) {
-      1 => 'kg',
+      1 => ' lbs',
       2 => '/100',
       _ => '%',
     };
@@ -1175,56 +1199,102 @@ class _BodyScreenState extends State<BodyScreen> {
   }
 }
 
-/// Stylised body-render placeholder card (left column of the composition row).
-class _BodyRenderCard extends StatelessWidget {
-  const _BodyRenderCard();
+/// Muscle map — a simple front-body silhouette with each region tinted by
+/// its latest scan score (green = strong, gold = medium, red = lagging,
+/// grey = not assessed). Replaces the old empty "body render" placeholder.
+class _MuscleMapCard extends StatelessWidget {
+  const _MuscleMapCard({required this.scores, this.scanDate});
+
+  /// Scores 0-10 keyed by: chest, back, shoulders, arms, legs, core.
+  final Map<String, double?> scores;
+  final String? scanDate;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            kPink.withValues(alpha: 0.08),
-            AppColors.surface,
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
         border: Border.all(color: AppColors.border),
       ),
-      child: Stack(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: 10,
-            left: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                'BODY RENDER',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.0,
+          Text(
+            scanDate != null ? 'MUSCLE MAP · $scanDate' : 'MUSCLE MAP',
+            style: kLabelSmall.copyWith(fontSize: 8),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 0.55,
+                child: CustomPaint(
+                  painter: _MuscleMapPainter(scores: scores),
                 ),
               ),
-            ),
-          ),
-          Center(
-            child: Icon(
-              Icons.accessibility_new_rounded,
-              size: 96,
-              color: kPink.withValues(alpha: 0.45),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _MuscleMapPainter extends CustomPainter {
+  _MuscleMapPainter({required this.scores});
+
+  final Map<String, double?> scores;
+
+  Color _tint(String region) {
+    final v = scores[region];
+    if (v == null) return Colors.white.withValues(alpha: 0.08);
+    if (v >= 7) return kGreen.withValues(alpha: 0.75);
+    if (v >= 5) return kGold.withValues(alpha: 0.75);
+    return kPink.withValues(alpha: 0.8);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    Paint fill(String region) => Paint()..color = _tint(region);
+    final neutral = Paint()..color = Colors.white.withValues(alpha: 0.10);
+
+    RRect rr(double l, double t, double r, double b, [double rad = 8]) =>
+        RRect.fromLTRBR(l * w, t * h, r * w, b * h, Radius.circular(rad));
+
+    // Head (neutral)
+    canvas.drawCircle(Offset(0.5 * w, 0.07 * h), 0.075 * h, neutral);
+
+    // Shoulders — two caps beside the upper torso
+    canvas.drawCircle(
+        Offset(0.26 * w, 0.20 * h), 0.055 * h, fill('shoulders'));
+    canvas.drawCircle(
+        Offset(0.74 * w, 0.20 * h), 0.055 * h, fill('shoulders'));
+
+    // Chest — upper torso block
+    canvas.drawRRect(rr(0.32, 0.16, 0.68, 0.32), fill('chest'));
+
+    // Core — lower torso block
+    canvas.drawRRect(rr(0.34, 0.33, 0.66, 0.50), fill('core'));
+
+    // Arms — hanging limbs
+    canvas.drawRRect(rr(0.16, 0.26, 0.27, 0.52, 6), fill('arms'));
+    canvas.drawRRect(rr(0.73, 0.26, 0.84, 0.52, 6), fill('arms'));
+
+    // Legs — two columns
+    canvas.drawRRect(rr(0.34, 0.52, 0.485, 0.95, 6), fill('legs'));
+    canvas.drawRRect(rr(0.515, 0.52, 0.66, 0.95, 6), fill('legs'));
+
+    // Back isn't visible from the front — show it as a thin band behind
+    // the neck/traps so the score still appears on the map.
+    canvas.drawRRect(rr(0.36, 0.125, 0.64, 0.155, 4), fill('back'));
+  }
+
+  @override
+  bool shouldRepaint(_MuscleMapPainter old) => old.scores != scores;
 }
