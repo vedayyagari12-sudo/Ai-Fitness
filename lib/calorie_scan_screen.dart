@@ -12,6 +12,7 @@ import 'api_service.dart';
 import 'services/nav_service.dart' show triggerTodayRefresh;
 import 'services/permission_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/deco.dart';
 import 'utils/snackbar.dart';
 
 class CalorieScanScreen extends StatefulWidget {
@@ -235,10 +236,10 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
     final grade = proteinPct >= 0.28 && cal <= 700
         ? 'A'
         : proteinPct >= 0.20
-            ? 'B'
-            : carbsPct >= 0.6 || cal > 900
-                ? 'D'
-                : 'C';
+        ? 'B'
+        : carbsPct >= 0.6 || cal > 900
+        ? 'D'
+        : 'C';
     tags.add(('NUTRI-SCORE $grade', kGold));
     return tags;
   }
@@ -293,8 +294,9 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius:
-              const BorderRadius.vertical(bottom: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
           child: Image.memory(
             _photoBytes!,
             height: 200,
@@ -305,13 +307,11 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(20),
+              ),
               gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  kBgDeep.withValues(alpha: 0.55),
-                ],
+                colors: [Colors.transparent, kBgDeep.withValues(alpha: 0.55)],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -349,23 +349,52 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
     return (sum / _items.length).round();
   }
 
+  /// Big tappable camera target with a soft glow and floating food emojis —
+  /// gives the empty scan state some life before the AI has anything to show.
+  Widget _captureHero() {
+    return GestureDetector(
+      onTap: isLoading ? null : () => scanFood(ImageSource.camera),
+      // Opaque so the whole block, padding included, is a tap target.
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          // Not const — a const instance would keep its old-theme colors when
+          // the light/dark toggle flips (the framework skips identical widgets).
+          ScanMotif(
+            icon: Icons.photo_camera_rounded,
+            accent: kBlue,
+            size: 200,
+            showDots: false,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'SNAP YOUR MEAL',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.4,
+              color: kTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _capturePrompt() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
-        Text(
-          'Take a photo of your meal for instant calorie analysis',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-        const SizedBox(height: 16),
+        _captureHero(),
+        const SizedBox(height: 18),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed:
-                    isLoading ? null : () => scanFood(ImageSource.camera),
+                onPressed: isLoading
+                    ? null
+                    : () => scanFood(ImageSource.camera),
                 icon: const Icon(Icons.camera_alt_outlined, size: 18),
                 label: const Text('CAMERA'),
                 style: _scanBtnStyle,
@@ -374,8 +403,9 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed:
-                    isLoading ? null : () => scanFood(ImageSource.gallery),
+                onPressed: isLoading
+                    ? null
+                    : () => scanFood(ImageSource.gallery),
                 icon: const Icon(Icons.photo_library_outlined, size: 18),
                 label: const Text('GALLERY'),
                 style: _scanBtnStyle,
@@ -458,7 +488,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
       const SizedBox(height: 8),
       Text(
         (result!['food_name'] as String?) ?? 'Unknown food',
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 28,
           fontWeight: FontWeight.w800,
           color: kTextPrimary,
@@ -476,10 +506,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
         const SizedBox(height: 6),
         ..._itemRows(),
       ],
-      if (_tags.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        _tagsRow(),
-      ],
+      if (_tags.isNotEmpty) ...[const SizedBox(height: 16), _tagsRow()],
       const SizedBox(height: 20),
       _actionRow(),
       const SizedBox(height: 8),
@@ -522,7 +549,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                 ),
               ),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(left: 8, top: 18),
               child: Text(
                 'kcal',
@@ -548,7 +575,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                       '$pct%',
                       style: const TextStyle(
                         color: kGold,
-                        fontSize: 11,
+                        fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -588,7 +615,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                     '${grams.round()}',
                     style: TextStyle(
                       color: color,
-                      fontSize: 22,
+                      fontSize: 30,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                     ),
@@ -597,7 +624,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                     'g',
                     style: TextStyle(
                       color: color.withValues(alpha: 0.7),
-                      fontSize: 13,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -658,7 +685,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                       (_items[i]['name'] as String?) ?? '',
                       style: TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -668,7 +695,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                       '${_num(_items[i]['confidence']).round()}% conf',
                       style: TextStyle(
                         color: AppColors.textMuted,
-                        fontSize: 11,
+                        fontSize: 16,
                       ),
                     ),
                   ],
@@ -678,7 +705,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                 '${_num(_items[i]['calories']).round()} kcal',
                 style: TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 13,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -696,8 +723,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
           for (final (label, color) in _tags)
             Container(
               margin: const EdgeInsets.only(right: 8),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(20),
@@ -784,7 +810,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
     side: const BorderSide(color: kBlue),
     padding: const EdgeInsets.symmetric(vertical: 14),
     textStyle: const TextStyle(
-      fontSize: 13,
+      fontSize: 16,
       fontWeight: FontWeight.w700,
       letterSpacing: 0.5,
     ),

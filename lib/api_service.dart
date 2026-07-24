@@ -173,8 +173,7 @@ Future<List<Map<String, dynamic>>> getWeeklySummary({int weeks = 8}) async {
       headers: getHeaders(),
     );
     if (response.statusCode == 200) {
-      return (jsonDecode(response.body) as List)
-          .cast<Map<String, dynamic>>();
+      return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
     }
     return [];
   } catch (e) {

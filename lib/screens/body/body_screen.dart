@@ -24,7 +24,8 @@ class _MuscleScore {
   final String name;
   final double score; // 0–10 (scan scale)
   final bool fromScan; // false = derived from training volume, no scan
-  bool lag = false;
+  bool lag = false; // genuinely weak (<7) — plans add volume here
+  bool maintain = false; // lowest of a strong set — keep doing what works
   Color color = kGreen;
 }
 
@@ -55,7 +56,8 @@ class _BodyScreenState extends State<BodyScreen> {
       _scans = results[0] as List<Map<String, dynamic>>;
       _bodyweight = results[1] as List<Map<String, dynamic>>;
       _muscle = results[2] as Map<String, dynamic>?;
-      _goal = ((results[3] as Map<String, dynamic>?)?['goal'] as String?) ??
+      _goal =
+          ((results[3] as Map<String, dynamic>?)?['goal'] as String?) ??
           'maintain';
       _loading = false;
     });
@@ -88,8 +90,7 @@ class _BodyScreenState extends State<BodyScreen> {
   ];
 
   bool get _hasScanScores =>
-      _latest != null &&
-      _muscleKeys.any((k) => _latest![k.$2] != null);
+      _latest != null && _muscleKeys.any((k) => _latest![k.$2] != null);
 
   /// Muscle development from the latest scan, scored 0-10 per muscle.
   /// Colors are ABSOLUTE (same scale as the color key and muscle map):
@@ -109,8 +110,8 @@ class _BodyScreenState extends State<BodyScreen> {
         m.color = m.score >= 7
             ? kGreen
             : m.score >= 5
-                ? kGold
-                : kPink;
+            ? kGold
+            : kPink;
       }
     } else {
       final groups = _muscle?['groups'] as Map<String, dynamic>? ?? {};
@@ -129,9 +130,18 @@ class _BodyScreenState extends State<BodyScreen> {
     }
     if (list.isEmpty) return list;
     list.sort((a, b) => b.score.compareTo(a.score));
-    // The two weakest are the current focus areas.
-    for (var i = 0; i < list.length; i++) {
-      list[i].lag = list.length > 2 && i >= list.length - 2;
+    // A muscle is only a FOCUS area when it's genuinely weak (score < 7).
+    // Being someone's relatively-lowest muscle at 8/10 is a strength to
+    // maintain, not a lag — cap at the two weakest so plans stay focused.
+    var flagged = 0;
+    for (var i = list.length - 1; i >= 0 && flagged < 2; i--) {
+      if (list[i].score < 7) {
+        list[i].lag = true;
+        flagged++;
+      } else if (i >= list.length - 2 && list.length > 2) {
+        // Relatively-lowest but objectively strong — maintain, don't "fix".
+        list[i].maintain = true;
+      }
     }
     return list;
   }
@@ -146,8 +156,18 @@ class _BodyScreenState extends State<BodyScreen> {
     final d = DateTime.tryParse(iso ?? '');
     if (d == null) return '';
     const months = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
     ];
     return '${months[d.month - 1]} ${d.day}';
   }
@@ -157,13 +177,17 @@ class _BodyScreenState extends State<BodyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: _load,
-          color: kPink,
-          backgroundColor: kBgCard,
-          child: _loading ? _skeleton() : _content(),
+      body: AmbientBackground(
+        accent: kPink,
+        accent2: kGold,
+        child: SafeArea(
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: _load,
+            color: kPink,
+            backgroundColor: kBgCard,
+            child: _loading ? _skeleton() : _content(),
+          ),
         ),
       ),
     );
@@ -221,8 +245,8 @@ class _BodyScreenState extends State<BodyScreen> {
         : 0.0;
     final prevWeightKg = _bodyweight.length >= 2
         ? ((_bodyweight[_bodyweight.length - 2]['weight_kg'] as num?)
-                ?.toDouble() ??
-            weightKg)
+                  ?.toDouble() ??
+              weightKg)
         : weightKg;
     final weightLb = weightKg * 2.20462;
     final weightChgLb = (weightKg - prevWeightKg) * 2.20462;
@@ -250,8 +274,7 @@ class _BodyScreenState extends State<BodyScreen> {
                 child: _MuscleMapCard(
                   scores: {
                     for (final (name, key) in _muscleKeys)
-                      name.toLowerCase():
-                          (_latest?[key] as num?)?.toDouble(),
+                      name.toLowerCase(): (_latest?[key] as num?)?.toDouble(),
                   },
                   scanDate: _latest != null
                       ? _dateLabel(_latest!['created_at'] as String?)
@@ -306,10 +329,7 @@ class _BodyScreenState extends State<BodyScreen> {
         ],
         const SizedBox(height: 16),
         _metricsCard(),
-        if (_scans.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          _historyCard(),
-        ],
+        if (_scans.isNotEmpty) ...[const SizedBox(height: 16), _historyCard()],
       ],
       const SizedBox(height: 28),
       Center(
@@ -328,15 +348,21 @@ class _BodyScreenState extends State<BodyScreen> {
           sections[i]
               .animate()
               .fadeIn(duration: 320.ms, delay: (i * 35).ms)
-              .slideY(begin: 0.05, end: 0, duration: 320.ms, delay: (i * 35).ms),
+              .slideY(
+                begin: 0.05,
+                end: 0,
+                duration: 320.ms,
+                delay: (i * 35).ms,
+              ),
       ],
     );
   }
 
   Widget _header() {
     final scanNo = _scans.length;
-    final latestDate =
-        _latest != null ? _dateLabel(_latest!['created_at'] as String?) : null;
+    final latestDate = _latest != null
+        ? _dateLabel(_latest!['created_at'] as String?)
+        : null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -373,7 +399,7 @@ class _BodyScreenState extends State<BodyScreen> {
               latestDate,
               style: TextStyle(
                 color: AppColors.textSecondary,
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
               ),
@@ -460,8 +486,9 @@ class _BodyScreenState extends State<BodyScreen> {
             TextField(
               controller: ctrl,
               autofocus: true,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(suffixText: 'lbs'),
             ),
             const SizedBox(height: 20),
@@ -502,15 +529,16 @@ class _BodyScreenState extends State<BodyScreen> {
   }) {
     final down = change < 0;
     final favorable = neutral ? false : (favorableWhenDown ? down : !down);
-    final deltaColor =
-        neutral ? AppColors.textMuted : (favorable ? kGreen : kPink);
+    final deltaColor = neutral
+        ? AppColors.textMuted
+        : (favorable ? kGreen : kPink);
     final arrow = neutral || change == 0 ? '' : (down ? '▼ ' : '▲ ');
     final mag = change.abs();
     final deltaStr = change == 0
         ? '—'
         : unit == 'pct'
-            ? '${mag.toStringAsFixed(1)}%'
-            : '${change >= 0 ? '+' : '-'}${mag.toStringAsFixed(1)} lb';
+        ? '${mag.toStringAsFixed(1)}%'
+        : '${change >= 0 ? '+' : '-'}${mag.toStringAsFixed(1)} lb';
 
     final card = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -522,19 +550,25 @@ class _BodyScreenState extends State<BodyScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: kLabelSmall.copyWith(fontSize: 9.5)),
+          Text(label, style: kLabelSmall.copyWith(fontSize: 11)),
           const SizedBox(height: 6),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                value,
-                style: TextStyle(
-                  color: valueColor ?? AppColors.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                  height: 1.0,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: valueColor ?? AppColors.textPrimary,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1,
+                      height: 1.0,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
@@ -548,7 +582,7 @@ class _BodyScreenState extends State<BodyScreen> {
                     '$arrow$deltaStr',
                     style: TextStyle(
                       color: deltaColor,
-                      fontSize: 11,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -561,7 +595,7 @@ class _BodyScreenState extends State<BodyScreen> {
             alignment: Alignment.centerRight,
             child: Text(
               'vs last',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 9),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ),
         ],
@@ -579,23 +613,23 @@ class _BodyScreenState extends State<BodyScreen> {
   /// Color key for the muscle map and development bars.
   Widget _scoreKey() {
     Widget item(Color color, String label) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-            ),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -614,7 +648,7 @@ class _BodyScreenState extends State<BodyScreen> {
             const SizedBox(width: 14),
             item(kPink, 'Lagging (<5)'),
             const SizedBox(width: 14),
-            item(Colors.white.withValues(alpha: 0.15), 'Not scanned'),
+            item(kFillMuted, 'Not scanned'),
           ],
         ),
       ),
@@ -638,12 +672,12 @@ class _BodyScreenState extends State<BodyScreen> {
           Text(
             _hasScanScores
                 ? 'Each muscle is scored 0–10 by your latest physique scan. '
-                    'Your overall score (/100) is roughly their average ×10.'
+                      'Your overall score (/100) is roughly their average ×10.'
                 : 'No scan yet — this shows how your last 30 days of '
-                    'training volume is balanced across muscle groups.',
+                      'training volume is balanced across muscle groups.',
             style: TextStyle(
               color: AppColors.textMuted,
-              fontSize: 11,
+              fontSize: 14,
               height: 1.4,
             ),
           ),
@@ -670,7 +704,9 @@ class _BodyScreenState extends State<BodyScreen> {
       child: Row(
         children: [
           SizedBox(
-            width: 96,
+            // Wide enough for the longest name plus a MAINTAIN chip at the
+            // larger type sizes.
+            width: 132,
             child: Row(
               children: [
                 Flexible(
@@ -680,25 +716,27 @@ class _BodyScreenState extends State<BodyScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-                if (m.lag) ...[
+                if (m.lag || m.maintain) ...[
                   const SizedBox(width: 5),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
-                      color: kPink.withValues(alpha: 0.18),
+                      color: (m.lag ? kPink : kGreen).withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      'FOCUS',
+                    child: Text(
+                      m.lag ? 'FOCUS' : 'MAINTAIN',
                       style: TextStyle(
-                        color: kPink,
-                        fontSize: 7.5,
+                        color: m.lag ? kPink : kGreen,
+                        fontSize: 11,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
                       ),
@@ -719,7 +757,7 @@ class _BodyScreenState extends State<BodyScreen> {
                 child: LinearProgressIndicator(
                   value: v,
                   minHeight: 7,
-                  backgroundColor: Colors.white.withValues(alpha: 0.06),
+                  backgroundColor: kFillSubtle,
                   valueColor: AlwaysStoppedAnimation<Color>(m.color),
                 ),
               ),
@@ -727,13 +765,15 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 38,
+            width: 48,
             child: Text(
-              m.fromScan ? '${m.score.round()}/10' : '${(m.score * 10).round()}%',
+              m.fromScan
+                  ? '${m.score.round()}/10'
+                  : '${(m.score * 10).round()}%',
               textAlign: TextAlign.right,
               style: TextStyle(
                 color: AppColors.textSecondary,
-                fontSize: 12,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -757,17 +797,14 @@ class _BodyScreenState extends State<BodyScreen> {
         children: [
           Row(
             children: [
-              Text(
-                'BODY FAT · ${trend.length} SCANS',
-                style: kLabelSmall,
-              ),
+              Text('BODY FAT · ${trend.length} SCANS', style: kLabelSmall),
               const Spacer(),
               if (hasData)
                 Text(
                   '${allTime <= 0 ? '' : '+'}${allTime.toStringAsFixed(1)}% all-time',
                   style: TextStyle(
                     color: allTime <= 0 ? kGreen : kPink,
-                    fontSize: 12,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -781,8 +818,10 @@ class _BodyScreenState extends State<BodyScreen> {
                 : Center(
                     child: Text(
                       'Scan again to start your trend.',
-                      style:
-                          TextStyle(color: AppColors.textMuted, fontSize: 13),
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 18,
+                      ),
                     ),
                   ),
           ),
@@ -887,8 +926,7 @@ class _BodyScreenState extends State<BodyScreen> {
   Widget _metricsCard() {
     final bfSeries = <(String, double)>[
       for (final s in _scans)
-        if (_bf(s) != null)
-          (_dateLabel(s['created_at'] as String?), _bf(s)!),
+        if (_bf(s) != null) (_dateLabel(s['created_at'] as String?), _bf(s)!),
     ];
     final weightSeries = <(String, double)>[
       for (final w in _bodyweight)
@@ -904,8 +942,9 @@ class _BodyScreenState extends State<BodyScreen> {
     ];
 
     final emptyHint = switch (_metricTab) {
-      1 => 'Tap the WEIGHT card above to log your bodyweight — '
-          'two entries start the trend',
+      1 =>
+        'Tap the WEIGHT card above to log your bodyweight — '
+            'two entries start the trend',
       2 => 'Scan again to track your score over time',
       _ => 'Scan again to track body fat over time',
     };
@@ -947,7 +986,7 @@ class _BodyScreenState extends State<BodyScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textMuted,
-                          fontSize: 12,
+                          fontSize: 15,
                         ),
                       ),
                     ),
@@ -990,7 +1029,7 @@ class _BodyScreenState extends State<BodyScreen> {
           takeaway,
           style: TextStyle(
             color: takeawayColor,
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1019,16 +1058,23 @@ class _BodyScreenState extends State<BodyScreen> {
     final matchesGoal = g.contains('bulk') || g.contains('muscle')
         ? gaining
         : g.contains('cut') || g.contains('lose')
-            ? !gaining
-            : true;
+        ? !gaining
+        : true;
     return _metricBody(
-      headline: 'Started ${series.first.$2.toStringAsFixed(1)} · '
+      headline:
+          'Started ${series.first.$2.toStringAsFixed(1)} · '
           'Now ${series.last.$2.toStringAsFixed(1)} lbs',
-      takeaway: '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)} lbs '
+      takeaway:
+          '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)} lbs '
           '(last 30 days)'
-          '${change.abs() < 0.05 ? '' : matchesGoal ? ' — on track for your goal' : ' — opposite of your goal'}',
-      takeawayColor:
-          change.abs() < 0.05 ? kCyan : (matchesGoal ? kGreen : kPink),
+          '${change.abs() < 0.05
+              ? ''
+              : matchesGoal
+              ? ' — on track for your goal'
+              : ' — opposite of your goal'}',
+      takeawayColor: change.abs() < 0.05
+          ? kCyan
+          : (matchesGoal ? kGreen : kPink),
       chart: _metricLine(
         series,
         change.abs() < 0.05 ? kCyan : (matchesGoal ? kGreen : kPink),
@@ -1063,73 +1109,107 @@ class _BodyScreenState extends State<BodyScreen> {
           show: true,
           drawVerticalLine: false,
           horizontalInterval: ((maxY - minY) / 3 + 0.001),
-          getDrawingHorizontalLine: (v) => FlLine(
-            color: Colors.white.withValues(alpha: 0.04),
-            strokeWidth: 1,
-          ),
+          getDrawingHorizontalLine: (v) =>
+              FlLine(color: kGridline, strokeWidth: 1),
         ),
         titlesData: const FlTitlesData(show: false),
         borderData: FlBorderData(show: false),
+        // Values stay on the chart — no tap-and-hold needed.
         lineTouchData: LineTouchData(
+          enabled: false,
           touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => AppColors.surfaceElevated,
+            getTooltipColor: (_) => Colors.transparent,
+            tooltipPadding: EdgeInsets.zero,
+            tooltipMargin: 4,
             getTooltipItems: (spots) => [
               for (final s in spots)
                 LineTooltipItem(
-                  '${series[s.x.toInt()].$1}\n${s.y.toStringAsFixed(1)}$unit',
+                  '${s.y.toStringAsFixed(1)}$unit',
                   TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    color: color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
             ],
           ),
         ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: [
-              for (var i = 0; i < values.length; i++)
+        showingTooltipIndicators: [
+          for (final i in _labelIndices(values.length))
+            ShowingTooltipIndicators([
+              LineBarSpot(
+                _metricBar(values, color),
+                0,
                 FlSpot(i.toDouble(), values[i]),
-            ],
-            isCurved: true,
-            preventCurveOverShooting: true,
-            color: color,
-            barWidth: 2.5,
-            dotData: const FlDotData(show: true),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: [color.withValues(alpha: 0.20), Colors.transparent],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
               ),
-            ),
-          ),
+            ]),
         ],
+        lineBarsData: [_metricBar(values, color)],
       ),
     );
   }
 
+  LineChartBarData _metricBar(List<double> values, Color color) {
+    return LineChartBarData(
+      spots: [
+        for (var i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
+      ],
+      isCurved: true,
+      preventCurveOverShooting: true,
+      color: color,
+      barWidth: 2.5,
+      dotData: const FlDotData(show: true),
+      belowBarData: BarAreaData(
+        show: true,
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.20), Colors.transparent],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+    );
+  }
+
+  /// Which points get a permanent value label — all of them when the series
+  /// is short, otherwise a readable subset that always includes the latest.
+  List<int> _labelIndices(int count) {
+    if (count <= 0) return const [];
+    if (count <= 6) return [for (var i = 0; i < count; i++) i];
+    const wanted = 5;
+    final step = (count - 1) / (wanted - 1);
+    final set = <int>{};
+    for (var k = 0; k < wanted; k++) {
+      set.add((k * step).round().clamp(0, count - 1));
+    }
+    set.add(count - 1);
+    final list = set.toList()..sort();
+    return list;
+  }
+
   /// Physique score as bars — one per scan, latest highlighted.
   Widget _scoreBars(List<(String, double)> series) {
-    final maxVal =
-        series.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
+    final maxVal = series.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
     return BarChart(
       BarChartData(
-        maxY: (maxVal * 1.15).clamp(10, 100).toDouble(),
+        // Headroom for the always-on value labels.
+        maxY: (maxVal * 1.35).clamp(10, 130).toDouble(),
         minY: 0,
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
         barTouchData: BarTouchData(
+          enabled: false,
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => AppColors.surfaceElevated,
+            getTooltipColor: (_) => Colors.transparent,
+            tooltipPadding: EdgeInsets.zero,
+            tooltipMargin: 2,
             getTooltipItem: (group, _, rod, _) => BarTooltipItem(
-              '${series[group.x].$1}\n${rod.toY.round()}/100',
+              '${rod.toY.round()}',
               TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                color: group.x == series.length - 1
+                    ? kLime
+                    : AppColors.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -1139,6 +1219,7 @@ class _BodyScreenState extends State<BodyScreen> {
           for (var i = 0; i < series.length; i++)
             BarChartGroupData(
               x: i,
+              showingTooltipIndicators: const [0],
               barRods: [
                 BarChartRodData(
                   toY: series[i].$2,
@@ -1205,8 +1286,7 @@ class _BodyScreenState extends State<BodyScreen> {
         });
       },
       child: InkWell(
-        onTap: () =>
-            setState(() => _expandedScan = expanded ? null : index),
+        onTap: () => setState(() => _expandedScan = expanded ? null : index),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Column(
@@ -1227,7 +1307,7 @@ class _BodyScreenState extends State<BodyScreen> {
                     _dateLabel(scan['created_at'] as String?),
                     style: TextStyle(
                       color: AppColors.textMuted,
-                      fontSize: 11,
+                      fontSize: 14,
                       letterSpacing: 0.6,
                     ),
                   ),
@@ -1237,7 +1317,7 @@ class _BodyScreenState extends State<BodyScreen> {
                       '$score/100',
                       style: const TextStyle(
                         color: kLime,
-                        fontSize: 13,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1247,7 +1327,7 @@ class _BodyScreenState extends State<BodyScreen> {
                       '${bf.toStringAsFixed(1)}%',
                       style: const TextStyle(
                         color: kPink,
-                        fontSize: 13,
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -1284,8 +1364,8 @@ class _BodyScreenState extends State<BodyScreen> {
     Color barColor(double v) => v >= 7
         ? kGreen
         : v >= 5
-            ? kGold
-            : kPink;
+        ? kGold
+        : kPink;
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -1303,7 +1383,7 @@ class _BodyScreenState extends State<BodyScreen> {
                       name,
                       style: TextStyle(
                         color: AppColors.textSecondary,
-                        fontSize: 12,
+                        fontSize: 15,
                       ),
                     ),
                   ),
@@ -1313,10 +1393,8 @@ class _BodyScreenState extends State<BodyScreen> {
                       child: LinearProgressIndicator(
                         value: v / 10,
                         minHeight: 4,
-                        backgroundColor:
-                            Colors.white.withValues(alpha: 0.06),
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(barColor(v)),
+                        backgroundColor: kFillSubtle,
+                        valueColor: AlwaysStoppedAnimation<Color>(barColor(v)),
                       ),
                     ),
                   ),
@@ -1325,7 +1403,7 @@ class _BodyScreenState extends State<BodyScreen> {
                     v.toStringAsFixed(0),
                     style: TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 12,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1443,9 +1521,7 @@ class _MuscleMapCard extends StatelessWidget {
             child: Center(
               child: AspectRatio(
                 aspectRatio: 0.55,
-                child: CustomPaint(
-                  painter: _MuscleMapPainter(scores: scores),
-                ),
+                child: CustomPaint(painter: _MuscleMapPainter(scores: scores)),
               ),
             ),
           ),
@@ -1456,16 +1532,26 @@ class _MuscleMapCard extends StatelessWidget {
 }
 
 class _MuscleMapPainter extends CustomPainter {
-  _MuscleMapPainter({required this.scores});
+  _MuscleMapPainter({required this.scores})
+    : _brightness = AppColors.brightness;
 
   final Map<String, double?> scores;
 
+  /// Captured so a light/dark flip repaints — every color below is
+  /// theme-derived, but `scores` alone wouldn't signal the change.
+  final Brightness _brightness;
+
   Color _tint(String region, [double alpha = 0.8]) {
     final v = scores[region];
-    if (v == null) return Colors.white.withValues(alpha: 0.08);
-    if (v >= 7) return kGreen.withValues(alpha: alpha);
-    if (v >= 5) return kGold.withValues(alpha: alpha);
-    return kPink.withValues(alpha: alpha);
+    if (v == null) return kBodyUnscored;
+    final hue = v >= 7
+        ? kGreen
+        : v >= 5
+        ? kGold
+        : kPink;
+    // Blend onto the card instead of leaving the fill translucent — over a
+    // white surface a 0.8-alpha tint (kGold especially) washes out badly.
+    return Color.alphaBlend(hue.withValues(alpha: alpha), kBgCard);
   }
 
   @override
@@ -1474,10 +1560,17 @@ class _MuscleMapPainter extends CustomPainter {
     final h = size.height;
     Paint fill(String region, [double alpha = 0.8]) =>
         Paint()..color = _tint(region, alpha);
-    final neutral = Paint()..color = Colors.white.withValues(alpha: 0.10);
+    final neutral = Paint()..color = kBodyNeutral;
+    // Contour on every shape — this is what keeps the silhouette readable
+    // when a region is unscored or its fill is low-contrast in light mode.
+    final contour = Paint()
+      ..color = kBodyContour
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
     final divider = Paint()
-      ..color = kBgCard
-      ..strokeWidth = 1.5
+      ..color = kBodyContour
+      ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
     RRect rr(double l, double t, double r, double b, [double rad = 8]) =>
@@ -1485,11 +1578,16 @@ class _MuscleMapPainter extends CustomPainter {
     Offset o(double x, double y) => Offset(x * w, y * h);
 
     // ── Head & neck (neutral) ─────────────────────────────────────────
-    canvas.drawOval(
-      Rect.fromCenter(center: o(0.5, 0.055), width: 0.13 * w, height: 0.09 * h),
-      neutral,
+    final head = Rect.fromCenter(
+      center: o(0.5, 0.055),
+      width: 0.13 * w,
+      height: 0.09 * h,
     );
-    canvas.drawRRect(rr(0.455, 0.09, 0.545, 0.125, 3), neutral);
+    canvas.drawOval(head, neutral);
+    canvas.drawOval(head, contour);
+    final neck = rr(0.455, 0.09, 0.545, 0.125, 3);
+    canvas.drawRRect(neck, neutral);
+    canvas.drawRRect(neck, contour);
 
     // ── Traps (back score) — sloping band from neck to shoulders ─────
     final traps = Path()
@@ -1499,24 +1597,32 @@ class _MuscleMapPainter extends CustomPainter {
       ..lineTo(0.64 * w, 0.165 * h)
       ..close();
     canvas.drawPath(traps, fill('back'));
+    canvas.drawPath(traps, contour);
 
     // ── Delts (shoulders) — rounded caps ──────────────────────────────
-    canvas.drawOval(
-      Rect.fromCenter(center: o(0.265, 0.185), width: 0.15 * w, height: 0.07 * h),
-      fill('shoulders'),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(center: o(0.735, 0.185), width: 0.15 * w, height: 0.07 * h),
-      fill('shoulders'),
-    );
+    for (final dx in [0.265, 0.735]) {
+      final delt = Rect.fromCenter(
+        center: o(dx, 0.185),
+        width: 0.15 * w,
+        height: 0.07 * h,
+      );
+      canvas.drawOval(delt, fill('shoulders'));
+      canvas.drawOval(delt, contour);
+    }
 
     // ── Chest — two pecs with a sternum line ─────────────────────────
-    canvas.drawRRect(rr(0.335, 0.165, 0.495, 0.30, 10), fill('chest'));
-    canvas.drawRRect(rr(0.505, 0.165, 0.665, 0.30, 10), fill('chest'));
+    for (final pec in [
+      rr(0.335, 0.165, 0.495, 0.30, 10),
+      rr(0.505, 0.165, 0.665, 0.30, 10),
+    ]) {
+      canvas.drawRRect(pec, fill('chest'));
+      canvas.drawRRect(pec, contour);
+    }
 
     // ── Core — abs block with segment lines ──────────────────────────
     final core = rr(0.36, 0.315, 0.64, 0.50, 9);
     canvas.drawRRect(core, fill('core'));
+    canvas.drawRRect(core, contour);
     canvas.drawLine(o(0.5, 0.325), o(0.5, 0.49), divider);
     canvas.drawLine(o(0.375, 0.375), o(0.625, 0.375), divider);
     canvas.drawLine(o(0.375, 0.435), o(0.625, 0.435), divider);
@@ -1533,6 +1639,7 @@ class _MuscleMapPainter extends CustomPainter {
         ..lineTo((sx + sign * 0.03 - 0.04) * w, 0.36 * h)
         ..close();
       canvas.drawPath(upper, fill('arms'));
+      canvas.drawPath(upper, contour);
       // Forearm — slightly narrower, lighter tint for depth
       final fx = sx + sign * 0.035;
       final fore = Path()
@@ -1542,6 +1649,7 @@ class _MuscleMapPainter extends CustomPainter {
         ..lineTo((fx + sign * 0.02 - 0.025) * w, 0.52 * h)
         ..close();
       canvas.drawPath(fore, fill('arms', 0.55));
+      canvas.drawPath(fore, contour);
     }
 
     arm(true);
@@ -1559,6 +1667,7 @@ class _MuscleMapPainter extends CustomPainter {
         ..lineTo((cx - 0.05) * w, 0.735 * h)
         ..close();
       canvas.drawPath(quad, fill('legs'));
+      canvas.drawPath(quad, contour);
       // Calf — smaller, lighter for depth
       final calf = Path()
         ..moveTo((cx - 0.045) * w, 0.755 * h)
@@ -1567,6 +1676,7 @@ class _MuscleMapPainter extends CustomPainter {
         ..lineTo((cx - 0.03) * w, 0.955 * h)
         ..close();
       canvas.drawPath(calf, fill('legs', 0.55));
+      canvas.drawPath(calf, contour);
     }
 
     leg(true);
@@ -1574,5 +1684,7 @@ class _MuscleMapPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MuscleMapPainter old) => old.scores != scores;
+  bool shouldRepaint(_MuscleMapPainter old) =>
+      old.scores != scores || old._brightness != _brightness;
 }
+

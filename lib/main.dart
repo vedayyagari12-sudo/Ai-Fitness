@@ -9,10 +9,12 @@ import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
 import 'services/nav_service.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
 import 'screens/workouts/workouts_tab_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ThemeController.load();
   await Supabase.initialize(
     url: 'https://jfopizywtgaqhkbkjlyz.supabase.co',
     anonKey:
@@ -26,14 +28,22 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dark-only: the design system is built for a near-black canvas.
-    AppColors.brightness = Brightness.dark;
-    return MaterialApp(
-      title: 'FitAI',
-      theme: AppTheme.darkTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
-      home: const AppBootstrap(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.mode,
+      builder: (context, mode, _) {
+        // Tokens (kBgCard, kTextPrimary, …) resolve through this, so it must
+        // be set before any themed widget builds.
+        AppColors.brightness = mode == ThemeMode.light
+            ? Brightness.light
+            : Brightness.dark;
+        return MaterialApp(
+          title: 'FitAI',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: mode,
+          home: const AppBootstrap(),
+        );
+      },
     );
   }
 }
@@ -126,11 +136,14 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
 
-  final screens = const [
-    TodayScreen(),
-    ScanTabScreen(),
-    BodyScreen(),
-    WorkoutsTabScreen(),
+  // Deliberately NOT const: a const list hands the framework identical widget
+  // instances, which short-circuits the rebuild — so a live theme flip would
+  // leave whichever tab is showing painted in the old palette.
+  List<Widget> get screens => [
+    const TodayScreen(),
+    const ScanTabScreen(),
+    const BodyScreen(),
+    const WorkoutsTabScreen(),
   ];
 
   @override
@@ -138,12 +151,19 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _syncOnboardingProfile();
     mainTabIndex.addListener(_onTabRequest);
+    // The nav bar reads AppColors directly, so a theme flip must re-run build.
+    ThemeController.mode.addListener(_onThemeChange);
   }
 
   @override
   void dispose() {
     mainTabIndex.removeListener(_onTabRequest);
+    ThemeController.mode.removeListener(_onThemeChange);
     super.dispose();
+  }
+
+  void _onThemeChange() {
+    if (mounted) setState(() {});
   }
 
   void _onTabRequest() {
@@ -169,7 +189,11 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final navItems = [
       (Icons.home_outlined, Icons.home_rounded, 'TODAY'),
-      (Icons.center_focus_weak_rounded, Icons.center_focus_strong_rounded, 'SCAN'),
+      (
+        Icons.center_focus_weak_rounded,
+        Icons.center_focus_strong_rounded,
+        'SCAN',
+      ),
       (Icons.person_outline_rounded, Icons.person_rounded, 'BODY'),
       (Icons.fitness_center_outlined, Icons.fitness_center_rounded, 'TRAIN'),
     ];
@@ -206,9 +230,7 @@ class _MainScreenState extends State<MainScreen> {
                           borderRadius: const BorderRadius.vertical(
                             bottom: Radius.circular(2),
                           ),
-                          boxShadow: [
-                            BoxShadow(color: accent, blurRadius: 8),
-                          ],
+                          boxShadow: [BoxShadow(color: accent, blurRadius: 8)],
                         ),
                       ),
                     ),
@@ -216,8 +238,7 @@ class _MainScreenState extends State<MainScreen> {
                       children: List.generate(navItems.length, (index) {
                         final item = navItems[index];
                         final isSelected = index == currentIndex;
-                        final color =
-                            isSelected ? accent : AppColors.textMuted;
+                        final color = isSelected ? accent : AppColors.textMuted;
                         return Expanded(
                           child: GestureDetector(
                             onTap: () {

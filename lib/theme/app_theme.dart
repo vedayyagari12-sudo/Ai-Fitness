@@ -6,13 +6,17 @@ import 'package:google_fonts/google_fonts.dart';
 // Self-contained palette + type scale for the Today screen (Step 1 spec).
 // Top-level so they don't touch the app-wide `AppColors` class below.
 // Palette matched to the reference screenshots: near-black canvas with
-// lime / blue / cyan / pink / gold accents. Each main tab owns an accent
-// (TODAY lime · SCAN blue · BODY pink · TRAIN cyan).
-const kBgDeep = Color(0xFF0A0A0A);
-const kBgCard = Color(0xFF141414);
-const kBgElevated = Color(0xFF1C1C1C);
-const kBgHighlight = Color(0xFF262629);
-const kLime = Color(0xFFC4FF33);
+// green / blue / cyan / pink / gold accents. Each main tab owns an accent
+// (TODAY green · SCAN blue · BODY pink · TRAIN cyan).
+// Surfaces and text delegate to AppColors so every screen (including the
+// widgets built on these k-tokens) follows the light/dark toggle.
+Color get kBgDeep => AppColors.background;
+Color get kBgCard => AppColors.surface;
+Color get kBgElevated => AppColors.surfaceElevated;
+Color get kBgHighlight => AppColors.surfaceHighlight;
+// "kLime" name kept (it's referenced ~25 places as the TODAY/primary accent)
+// but the value is now Spotify green, not lime.
+const kLime = Color(0xFF1ED760);
 const kBlue = Color(0xFF1CA7F0);
 const kCyan = Color(0xFF00C4D4);
 const kPink = Color(0xFFFF3B79);
@@ -20,10 +24,151 @@ const kGold = Color(0xFFFFD23F);
 const kPurple = Color(0xFF8B5CF6);
 const kGreen = Color(0xFF34D399);
 const kOrange = Color(0xFFFF8C00);
-const kTextPrimary = Color(0xFFFFFFFF);
-const kTextSecondary = Color(0xFF8A8A8A);
-const kTextMuted = Color(0xFF62626C);
-const kBorder = Color(0xFF242424);
+// Cool bluish-white used for the hero-card lift and page backdrop — the
+// WHOOP-style "bluish white into black" look. Deliberately NOT an accent
+// (no green tint anywhere in the chrome).
+const kSteel = Color(0xFFAEC4E4);
+Color get kTextPrimary => AppColors.textPrimary;
+Color get kTextSecondary => AppColors.textSecondary;
+Color get kTextMuted => AppColors.textMuted;
+Color get kBorder => AppColors.border;
+
+// ── Contrast fills ───────────────────────────────────────────────────────────
+// Faint washes painted ON TOP of a surface (progress-bar tracks, legend
+// swatches, chart gridlines). These must invert with the theme — a white
+// wash over a white card is literally invisible.
+const _kInk = Color(0xFF0B0D12); // light-mode "ink" (same as textPrimary)
+bool get _kDark => AppColors.brightness == Brightness.dark;
+
+Color get kFillSubtle => _kDark
+    ? Colors.white.withValues(alpha: 0.06)
+    : _kInk.withValues(alpha: 0.08);
+Color get kFillMuted => _kDark
+    ? Colors.white.withValues(alpha: 0.12)
+    : _kInk.withValues(alpha: 0.14);
+Color get kGridline => _kDark
+    ? Colors.white.withValues(alpha: 0.05)
+    : _kInk.withValues(alpha: 0.07);
+
+// ── Body map ─────────────────────────────────────────────────────────────────
+// Unscored regions and the never-scored head/neck. The contour stroke is what
+// guarantees the silhouette reads even when a fill is low-contrast.
+Color get kBodyUnscored => _kDark
+    ? Colors.white.withValues(alpha: 0.10)
+    : _kInk.withValues(alpha: 0.13);
+Color get kBodyNeutral => _kDark
+    ? Colors.white.withValues(alpha: 0.14)
+    : _kInk.withValues(alpha: 0.18);
+Color get kBodyContour => _kDark
+    ? Colors.white.withValues(alpha: 0.30)
+    : _kInk.withValues(alpha: 0.30);
+
+// ── Gradients ────────────────────────────────────────────────────────────────
+/// Page backdrop: a cool bluish-slate lift at the top settling into black
+/// (dark) or a pale blue-white settling into the off-white canvas (light) —
+/// the WHOOP "bluish white with black" feel. This is the only ambient
+/// treatment now; the old breathing corner glows were removed.
+LinearGradient get kPageGradient => LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: _kDark
+      ? const [Color(0xFF1E2736), Color(0xFF10131A), Color(0xFF0A0A0A)]
+      : const [Color(0xFFDFE7F3), Color(0xFFEDF1F8), Color(0xFFF3F4F7)],
+  stops: const [0.0, 0.45, 1.0],
+);
+
+/// Hero-card wash: a cool bluish-white sheen at the top-left fading into the
+/// normal surface, like light catching a pane of frosted glass. `alphaBlend`
+/// onto [kBgCard] keeps it opaque and theme-correct. Pass [kSteel] for the
+/// standard neutral lift (no green — per design direction).
+LinearGradient kHeroCardGradient(Color accent) => LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [
+    // A brighter cool "highlight" corner (glass catching light)…
+    Color.alphaBlend(
+      Colors.white.withValues(alpha: _kDark ? 0.05 : 0.0),
+      Color.alphaBlend(accent.withValues(alpha: 0.13), kBgCard),
+    ),
+    // …settling into the plain surface, with a faint deepening at the far
+    // corner so the pane reads as subtly curved.
+    kBgCard,
+    Color.alphaBlend(
+      Colors.black.withValues(alpha: _kDark ? 0.10 : 0.03),
+      kBgCard,
+    ),
+  ],
+  stops: const [0.0, 0.55, 1.0],
+);
+
+/// Bright hairline rim for glass cards — a lit top edge in dark, a crisp cool
+/// edge in light. Pair with [kGlassShadow] and [kHeroCardGradient].
+Color get kGlassBorder => _kDark
+    ? Colors.white.withValues(alpha: 0.10)
+    : Colors.white.withValues(alpha: 0.65);
+
+/// Soft drop shadow that lets a glass card float off the page backdrop.
+List<BoxShadow> get kGlassShadow => [
+  BoxShadow(
+    color: Colors.black.withValues(alpha: _kDark ? 0.35 : 0.06),
+    blurRadius: 24,
+    offset: const Offset(0, 8),
+  ),
+];
+
+// ── Numeric type scale ───────────────────────────────────────────────────────
+// Stat readouts, largest → smallest. Values carry their own accent color at
+// call sites via `.copyWith(color: kGold)`.
+TextStyle get kStatHero => GoogleFonts.inter(
+  fontSize: 52,
+  fontWeight: FontWeight.w800,
+  height: 1.0,
+  letterSpacing: -1.5,
+  color: kTextPrimary,
+);
+TextStyle get kStatXLarge => GoogleFonts.inter(
+  fontSize: 44,
+  fontWeight: FontWeight.w900,
+  height: 1.0,
+  letterSpacing: -1,
+  color: kTextPrimary,
+);
+TextStyle get kStatLarge => GoogleFonts.inter(
+  fontSize: 38,
+  fontWeight: FontWeight.w800,
+  height: 1.0,
+  letterSpacing: -0.8,
+  color: kTextPrimary,
+);
+TextStyle get kStatMedium => GoogleFonts.inter(
+  fontSize: 30,
+  fontWeight: FontWeight.w800,
+  height: 1.0,
+  letterSpacing: -0.5,
+  color: kTextPrimary,
+);
+TextStyle get kStatSmall => GoogleFonts.inter(
+  fontSize: 24,
+  fontWeight: FontWeight.w800,
+  height: 1.05,
+  color: kTextPrimary,
+);
+TextStyle get kStatXSmall => GoogleFonts.inter(
+  fontSize: 18,
+  fontWeight: FontWeight.w700,
+  height: 1.1,
+  color: kTextPrimary,
+);
+TextStyle get kStatCaption => GoogleFonts.inter(
+  fontSize: 14,
+  fontWeight: FontWeight.w600,
+  color: kTextSecondary,
+);
+TextStyle get kAxisLabel => GoogleFonts.inter(
+  fontSize: 12,
+  fontWeight: FontWeight.w600,
+  color: kTextMuted,
+);
 
 TextStyle get kDisplayLarge => GoogleFonts.inter(
   fontSize: 48,
@@ -37,20 +182,32 @@ TextStyle get kHeadlineLarge => GoogleFonts.inter(
   letterSpacing: -0.5,
   color: kTextPrimary,
 );
-TextStyle get kHeadlineMedium =>
-    GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: kTextPrimary);
-TextStyle get kTitleLarge =>
-    GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrimary);
+TextStyle get kHeadlineMedium => GoogleFonts.inter(
+  fontSize: 22,
+  fontWeight: FontWeight.w700,
+  color: kTextPrimary,
+);
+TextStyle get kTitleLarge => GoogleFonts.inter(
+  fontSize: 18,
+  fontWeight: FontWeight.w700,
+  color: kTextPrimary,
+);
 TextStyle get kLabelSmall => GoogleFonts.inter(
   fontSize: 10,
   fontWeight: FontWeight.w600,
   letterSpacing: 1.8,
   color: kTextMuted,
 );
-TextStyle get kBodyMedium =>
-    GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, color: kTextPrimary);
-TextStyle get kBodySmall =>
-    GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w400, color: kTextMuted);
+TextStyle get kBodyMedium => GoogleFonts.inter(
+  fontSize: 14,
+  fontWeight: FontWeight.w400,
+  color: kTextPrimary,
+);
+TextStyle get kBodySmall => GoogleFonts.inter(
+  fontSize: 11,
+  fontWeight: FontWeight.w400,
+  color: kTextMuted,
+);
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// "The Outsiders" athlete-tracker design system for FitAI.
@@ -72,6 +229,8 @@ class AppColors {
       _l ? const Color(0xFFFFFFFF) : const Color(0xFF141414);
   static Color get surfaceElevated =>
       _l ? const Color(0xFFEAECF0) : const Color(0xFF1C1C1C);
+  static Color get surfaceHighlight =>
+      _l ? const Color(0xFFDDE0E6) : const Color(0xFF262629);
 
   // ── Text (theme-aware) ─────────────────────────────────────────────────────
   static Color get textPrimary =>
@@ -113,7 +272,6 @@ class AppColors {
   // ── Ring / chart hues (semantic data series) ───────────────────────────────
   static const Color ringMove = Color(0xFFFF3B30);
   static const Color ringExercise = Color(0xFF22D3EE);
-  static const Color ringStand = Color(0xFFFFFFFF);
   static const Color chartBar = Color(0xFF3B82F6);
 }
 

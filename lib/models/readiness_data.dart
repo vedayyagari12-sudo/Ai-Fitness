@@ -1,6 +1,7 @@
 /// Data backing the readiness card on the TODAY screen.
-/// Ring progresses are 0..1; score blends weekly training progress (60%),
-/// calorie fueling (25%) and protein intake (15%).
+/// Ring progresses are 0..1. The score is DAILY — train today (40%) +
+/// calories vs target (35%) + protein vs target (25%) — so it resets to 0
+/// every morning and 100 is achievable every day.
 class ReadinessData {
   const ReadinessData({
     required this.score,
@@ -26,7 +27,7 @@ class ReadinessData {
   // Ring sweeps (0..1)
   final double caloriesProgress; // outer (lime)
   final double proteinProgress; // middle (cyan)
-  final double sessionsProgress; // inner (pink) — weekly sessions vs goal
+  final double sessionsProgress; // inner (pink) — 1.0 once trained today
 
   // Corner stats
   final String fueledValue; // "84%"

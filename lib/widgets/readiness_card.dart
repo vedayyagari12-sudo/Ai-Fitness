@@ -17,140 +17,134 @@ class ReadinessCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: kBgCard,
+        gradient: kHeroCardGradient(kSteel),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kBorder),
+        border: Border.all(color: kGlassBorder),
+        boxShadow: kGlassShadow,
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          SizedBox(
-            height: 236,
-            child: Stack(
-              children: [
-                // Concentric rings + score, animated on load.
-                Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 1000),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, t, _) => SizedBox(
-                      width: 168,
-                      height: 168,
-                      child: CustomPaint(
-                        painter: _RingPainter(
-                          calories: data.caloriesProgress * t,
-                          protein: data.proteinProgress * t,
-                          sessions: data.sessionsProgress * t,
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${(data.score * t).round()}',
-                                style: const TextStyle(
-                                  fontSize: 44,
-                                  fontWeight: FontWeight.w900,
-                                  color: kTextPrimary,
-                                  height: 1.0,
-                                  letterSpacing: -1,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'READY',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.8,
-                                  color: kLime,
-                                ),
-                              ),
-                            ],
-                          ),
+          // Stats sit in rows above and below the ring rather than at the
+          // corners of a Stack — at readable sizes they'd collide with it.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _stat(
+                  value: data.fueledValue,
+                  label: 'FUELED',
+                  sub: data.caloriesLabel,
+                  valueColor: kLime,
+                ),
+              ),
+              Expanded(
+                child: _stat(
+                  value: data.loadValue,
+                  label: 'LOAD',
+                  sub: data.loadLabel,
+                  valueColor: kGold,
+                  subColor: kGold,
+                  alignEnd: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          // Concentric rings + score, animated on load.
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 1000),
+            curve: Curves.easeOutCubic,
+            builder: (context, t, _) => SizedBox(
+              width: 176,
+              height: 176,
+              child: CustomPaint(
+                painter: _RingPainter(
+                  calories: data.caloriesProgress * t,
+                  protein: data.proteinProgress * t,
+                  sessions: data.sessionsProgress * t,
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${(data.score * t).round()}',
+                        style: kStatXLarge.copyWith(fontSize: 52),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'READY',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.8,
+                          color: kLime,
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-                // Info button — explains the score.
-                Positioned(
-                  right: 0,
-                  top: 44,
-                  child: GestureDetector(
-                    onTap: () => _showInfoSheet(context),
-                    behavior: HitTestBehavior.opaque,
-                    child: Icon(
-                      Icons.info_outline_rounded,
-                      size: 18,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                // Corner stats
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  child: _stat(
-                    value: data.fueledValue,
-                    label: 'FUELED',
-                    sub: data.caloriesLabel,
-                    valueColor: kLime,
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: _stat(
-                    value: data.loadValue,
-                    label: 'LOAD',
-                    sub: data.loadLabel,
-                    valueColor: kGold,
-                    subColor: kGold,
-                    alignEnd: true,
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: _stat(
-                    value: data.proteinValue,
-                    label: 'PROTEIN',
-                    sub: data.proteinTarget,
-                    valueColor: kCyan,
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: _stat(
-                    value: data.bodyFatValue,
-                    label: 'BODY FAT',
-                    sub: data.bodyFatDelta,
-                    valueColor: kPink,
-                    subColor: kPink,
-                    alignEnd: true,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          // Ring color legend — what each ring measures.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _stat(
+                  value: data.proteinValue,
+                  label: 'PROTEIN',
+                  sub: data.proteinTarget,
+                  valueColor: kCyan,
+                ),
+              ),
+              Expanded(
+                child: _stat(
+                  value: data.bodyFatValue,
+                  label: 'BODY FAT',
+                  sub: data.bodyFatDelta,
+                  valueColor: kPink,
+                  subColor: kPink,
+                  alignEnd: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Ring color legend — what each ring measures. The whole row is the
+          // "how is this scored?" tap target (no floating icon to collide with
+          // the corner stats).
+          GestureDetector(
+            onTap: () => _showInfoSheet(context),
+            behavior: HitTestBehavior.opaque,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 14,
+              runSpacing: 6,
               children: [
                 _legend(kLime, 'Calories'),
-                const SizedBox(width: 14),
                 _legend(kCyan, 'Protein'),
-                const SizedBox(width: 14),
-                _legend(kPink, 'Weekly sessions'),
-                const SizedBox(width: 14),
-                Text(
-                  'Tap ⓘ for how it\'s scored',
-                  style: TextStyle(fontSize: 9, color: AppColors.textMuted),
+                _legend(kPink, 'Trained today'),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'How it works',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -165,15 +159,12 @@ class ReadinessCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 7,
-          height: 7,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 9, color: kTextSecondary),
-        ),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(fontSize: 12, color: kTextSecondary)),
       ],
     );
   }
@@ -191,11 +182,12 @@ class ReadinessCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('HOW YOUR READINESS IS SCORED', style: kLabelSmall),
+            Text('HOW YOUR DAILY SCORE WORKS', style: kLabelSmall),
             const SizedBox(height: 6),
             Text(
-              'Readiness blends three things — hitting your weekly training '
-              'goal matters most, then today\'s fueling.',
+              'A fresh 100 is up for grabs every single day: train once, '
+              'hit your calories, hit your protein. It resets to 0 each '
+              'morning.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
@@ -205,15 +197,15 @@ class ReadinessCard extends StatelessWidget {
             const SizedBox(height: 18),
             _componentRow(
               color: kPink,
-              weight: '60%',
-              name: 'Training',
+              weight: '40%',
+              name: 'Train today',
               detail: data.trainingDetail,
               progress: data.sessionsProgress,
             ),
             const SizedBox(height: 14),
             _componentRow(
               color: kLime,
-              weight: '25%',
+              weight: '35%',
               name: 'Calories',
               detail: data.fuelDetail,
               progress: data.caloriesProgress,
@@ -221,7 +213,7 @@ class ReadinessCard extends StatelessWidget {
             const SizedBox(height: 14),
             _componentRow(
               color: kCyan,
-              weight: '15%',
+              weight: '25%',
               name: 'Protein',
               detail: data.proteinDetail,
               progress: data.proteinProgress,
@@ -230,7 +222,7 @@ class ReadinessCard extends StatelessWidget {
             Center(
               child: Text(
                 'Score today: ${data.score} / 100',
-                style: const TextStyle(
+                style: TextStyle(
                   color: kTextPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -286,10 +278,7 @@ class ReadinessCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 detail,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
               ),
               const SizedBox(height: 6),
               ClipRRect(
@@ -297,7 +286,7 @@ class ReadinessCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress.clamp(0.0, 1.0),
                   minHeight: 4,
-                  backgroundColor: Colors.white.withValues(alpha: 0.06),
+                  backgroundColor: kFillSubtle,
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),
               ),
@@ -312,25 +301,35 @@ class ReadinessCard extends StatelessWidget {
     required String value,
     required String label,
     required String sub,
-    Color valueColor = kTextPrimary,
-    Color subColor = kTextMuted,
+    Color? valueColor,
+    Color? subColor,
     bool alignEnd = false,
   }) {
+    valueColor ??= kTextPrimary;
+    subColor ??= kTextMuted;
+    final align = alignEnd ? TextAlign.right : TextAlign.left;
     return Column(
       crossAxisAlignment: alignEnd
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            color: valueColor,
-          ),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+          child: Text(value, style: kStatSmall.copyWith(color: valueColor)),
         ),
-        Text(label, style: kLabelSmall),
-        Text(sub, style: TextStyle(fontSize: 11, color: subColor)),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: kLabelSmall.copyWith(fontSize: 11),
+          textAlign: align,
+        ),
+        const SizedBox(height: 1),
+        Text(
+          sub,
+          style: kStatCaption.copyWith(color: subColor),
+          textAlign: align,
+        ),
       ],
     );
   }

@@ -8,6 +8,7 @@ import '../services/nav_service.dart';
 import '../services/split_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import '../theme/theme_controller.dart';
 import '../utils/units.dart';
 import '../widgets/physique_mini_card.dart';
 import '../widgets/readiness_card.dart';
@@ -16,6 +17,7 @@ import '../widgets/section_label.dart';
 import '../widgets/streak_chip.dart';
 import '../widgets/today_session_card.dart';
 import '../widgets/trend_card.dart';
+import '../widgets/week_strip.dart';
 import 'profile/profile_screen.dart';
 
 class TodayScreen extends StatefulWidget {
@@ -36,13 +38,21 @@ class _TodayScreenState extends State<TodayScreen> {
   void initState() {
     super.initState();
     todayTick.addListener(_load);
+    // Repaint immediately on a theme flip — the profile screen (where the
+    // toggle lives) sits on top of this one, so a stale frame shows through.
+    ThemeController.mode.addListener(_onThemeChange);
     _load();
   }
 
   @override
   void dispose() {
     todayTick.removeListener(_load);
+    ThemeController.mode.removeListener(_onThemeChange);
     super.dispose();
+  }
+
+  void _onThemeChange() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -72,9 +82,11 @@ class _TodayScreenState extends State<TodayScreen> {
   String get _goal => (_dash?['goal'] as String?) ?? 'maintain';
 
   ReadinessData get _readiness {
-    final weeklyGoal = ((_dash?['weekly_goal'] as num?)?.toInt() ?? 4).clamp(1, 7);
-    final sessions = (_dash?['sessions_this_week'] as num?)?.toInt() ?? 0;
-    final weekProgress = (sessions / weeklyGoal).clamp(0.0, 1.0);
+    // DAILY score — everything below is about TODAY only, so it naturally
+    // resets to 0 each morning and 100 is achievable every single day:
+    // train once (40%) + hit your calories (35%) + hit your protein (25%).
+    final sessionsToday = (_num(_stats['sessions'])).toInt();
+    final trained = sessionsToday > 0 ? 1.0 : 0.0;
 
     final kcal = _num(_stats['calories']);
     final kcalTarget = _num(_stats['calorie_target']);
@@ -82,15 +94,15 @@ class _TodayScreenState extends State<TodayScreen> {
 
     final protein = _num(_stats['protein']);
     final proteinTarget = _num(_stats['protein_target']);
-    final proteinP =
-        proteinTarget > 0 ? (protein / proteinTarget).clamp(0.0, 1.0) : 0.0;
+    final proteinP = proteinTarget > 0
+        ? (protein / proteinTarget).clamp(0.0, 1.0)
+        : 0.0;
 
     final bf = _num(_stats['body_fat']);
     final bfChange = _num(_stats['body_fat_change']);
     final volume = _num(_stats['volume']).round();
 
-    // Readiness = blend of weekly training progress and today's fueling.
-    final score = ((weekProgress * 0.6 + fueled * 0.25 + proteinP * 0.15) * 100)
+    final score = ((trained * 0.40 + fueled * 0.35 + proteinP * 0.25) * 100)
         .round()
         .clamp(0, 100);
 
@@ -98,22 +110,25 @@ class _TodayScreenState extends State<TodayScreen> {
       score: score,
       caloriesProgress: fueled,
       proteinProgress: proteinP,
-      sessionsProgress: weekProgress,
+      sessionsProgress: trained,
       fueledValue: '${(fueled * 100).round()}%',
       caloriesLabel: '${_formatThousands(kcal.round())} kcal',
       loadValue: '$volume',
       loadLabel: '${_sessionFocus().toLowerCase()} day',
       proteinValue: '${protein.round()}g',
-      proteinTarget:
-          proteinTarget > 0 ? 'of ${proteinTarget.round()}g' : 'set a goal',
+      proteinTarget: proteinTarget > 0
+          ? 'of ${proteinTarget.round()}g'
+          : 'set a goal',
       bodyFatValue: bf > 0 ? '${bf.toStringAsFixed(1)}%' : '—',
       bodyFatDelta: bfChange != 0
           ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}%'
           : '',
-      trainingDetail: '$sessions of $weeklyGoal sessions this week',
+      trainingDetail: sessionsToday > 0
+          ? 'Trained today ✓'
+          : 'No workout yet today',
       fuelDetail: kcalTarget > 0
           ? '${_formatThousands(kcal.round())} of '
-              '${_formatThousands(kcalTarget.round())} kcal today'
+                '${_formatThousands(kcalTarget.round())} kcal today'
           : '${_formatThousands(kcal.round())} kcal today',
       proteinDetail: proteinTarget > 0
           ? '${protein.round()}g of ${proteinTarget.round()}g today'
@@ -125,8 +140,11 @@ class _TodayScreenState extends State<TodayScreen> {
   /// what the AI session generator will build.
   String _sessionFocus() => SplitService.focusForToday(_split);
 
+  bool get _isRestDay => SplitService.isRestDay(_split);
+
   String _sessionName() {
     final focus = _sessionFocus();
+    if (focus == SplitService.rest) return 'Rest day';
     final g = _goal.toLowerCase();
     if (g.contains('cut') || g.contains('lose')) return '$focus Conditioning';
     return '$focus Session';
@@ -155,23 +173,11 @@ class _TodayScreenState extends State<TodayScreen> {
     return ((entry['labels'] as List?) ?? []).cast<String>();
   }
 
-  /// Daily calorie target: goal-based estimate from bodyweight
-  /// (bulk ×16, cut ×12, maintain ×14 kcal per lb), falling back to the
-  /// backend's TDEE when no weight is known.
+  /// Daily calorie target — computed on the backend from the user's profile
+  /// (height, weight, age, gender, activity via Mifflin-St Jeor TDEE) and
+  /// adjusted for their goal (surplus to bulk, deficit to cut). Using the
+  /// backend value keeps the ring and the chart's target line in agreement.
   double get _calorieTarget {
-    final weights = _trendValues('weight');
-    final weightKg =
-        weights.isNotEmpty ? weights.last : _num(_stats['weight']);
-    if (weightKg > 0) {
-      final lbs = kgToLbs(weightKg);
-      final g = _goal.toLowerCase();
-      final mult = g.contains('bulk') || g.contains('muscle')
-          ? 16
-          : g.contains('cut') || g.contains('lose')
-              ? 12
-              : 14;
-      return (lbs * mult).roundToDouble();
-    }
     final backend = _num(_stats['calorie_target']);
     return backend > 0 ? backend : 2200;
   }
@@ -179,9 +185,9 @@ class _TodayScreenState extends State<TodayScreen> {
   /// Weekly training volume in lbs lifted, oldest → newest (up to 8 weeks).
   /// Backend returns newest-first.
   List<double> get _weeklyVolume => [
-        for (final w in _weeklySummary.reversed)
-          (w['total_volume'] as num?)?.toDouble() ?? 0.0,
-      ];
+    for (final w in _weeklySummary.reversed)
+      (w['total_volume'] as num?)?.toDouble() ?? 0.0,
+  ];
 
   int? get _latestScanScore {
     final scans = ((_dash?['recent_scans'] as List?) ?? [])
@@ -201,9 +207,9 @@ class _TodayScreenState extends State<TodayScreen> {
   List<double> get _bfPoints {
     final charts = (_dash?['charts'] as List?) ?? [];
     final bf = charts.cast<Map<String, dynamic>?>().firstWhere(
-          (c) => c?['id'] == 'body_fat_trend',
-          orElse: () => null,
-        );
+      (c) => c?['id'] == 'body_fat_trend',
+      orElse: () => null,
+    );
     if (bf == null) return [];
     final values = ((bf['values'] as List?) ?? [])
         .map((v) => (v as num).toDouble())
@@ -224,8 +230,10 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBgDeep,
-      body: SafeArea(
-        child: _loading ? _skeleton() : _content(),
+      body: AmbientBackground(
+        accent: kPink, // top-right glow
+        accent2: kLime, // bottom-left glow — two-tone
+        child: SafeArea(child: _loading ? _skeleton() : _content()),
       ),
     );
   }
@@ -235,9 +243,20 @@ class _TodayScreenState extends State<TodayScreen> {
     final bfChange = _num(_stats['body_fat_change']);
     final hasScan = ((_dash?['recent_scans'] as List?) ?? []).isNotEmpty;
 
+    final weeklyActivity = [
+      for (final a in (_streak?['weekly_activity'] as List?) ?? []) a == true,
+    ];
+
     final sections = <Widget>[
       _header(),
       const SizedBox(height: 16),
+      if (weeklyActivity.isNotEmpty) ...[
+        WeekStrip(
+          activity: weeklyActivity,
+          streak: (_streak?['current_streak'] as num?)?.toInt() ?? 0,
+        ),
+        const SizedBox(height: 12),
+      ],
       ReadinessCard(data: _readiness),
       const SizedBox(height: 12),
       TrendCard(
@@ -268,8 +287,13 @@ class _TodayScreenState extends State<TodayScreen> {
           Expanded(
             child: TodaySessionCard(
               title: _sessionName(),
-              meta: '~45 min · AI generated',
-              note: hasScan ? 'Tuned to your physique scan' : '',
+              meta: _isRestDay
+                  ? 'Recovery — nothing scheduled'
+                  : '~45 min · AI generated',
+              note: _isRestDay
+                  ? ''
+                  : (hasScan ? 'Tuned to your physique scan' : ''),
+              startLabel: _isRestDay ? 'View →' : 'Start →',
               onStart: () => mainTabIndex.value = 3,
             ),
           ),
@@ -305,8 +329,18 @@ class _TodayScreenState extends State<TodayScreen> {
     final now = DateTime.now();
     const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
     const months = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
     ];
     final dateLabel =
         '${days[now.weekday - 1]} · ${months[now.month - 1]} ${now.day}';
@@ -319,8 +353,8 @@ class _TodayScreenState extends State<TodayScreen> {
     final greeting = now.hour < 12
         ? 'Good morning'
         : now.hour < 17
-            ? 'Good afternoon'
-            : 'Good evening';
+        ? 'Good afternoon'
+        : 'Good evening';
 
     final streakCount = (_streak?['current_streak'] as num?)?.toInt() ?? 0;
     // activity_today is a list of activity kinds (["workout", "meal"]).
@@ -375,7 +409,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 alignment: Alignment.center,
                 child: Text(
                   name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: kTextPrimary,
@@ -406,7 +440,7 @@ class _TodayScreenState extends State<TodayScreen> {
         alignment: Alignment.center,
         child: GestureDetector(
           onTap: () => mainTabIndex.value = 1,
-          child: const Text(
+          child: Text(
             'No scans yet — scan your first meal in the SCAN tab →',
             style: TextStyle(fontSize: 12, color: kTextMuted),
           ),
@@ -478,11 +512,7 @@ class _TodayScreenState extends State<TodayScreen> {
         line(120, 12),
         const SizedBox(height: 8),
         Row(
-          children: [
-            line(140, 84),
-            const SizedBox(width: 12),
-            line(140, 84),
-          ],
+          children: [line(140, 84), const SizedBox(width: 12), line(140, 84)],
         ),
       ],
     );

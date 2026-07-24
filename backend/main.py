@@ -193,6 +193,29 @@ def estimate_tdee(
     return max(1200.0, round(bmr * mult))
 
 
+def goal_adjusted_targets(
+    tdee: float, weight_kg: float | None, goal: str | None
+) -> tuple[float, float]:
+    """Daily calorie + protein targets, derived from maintenance [tdee] and the
+    user's [goal] so every value tracks their real stats (height/weight/age/
+    gender/activity feed the TDEE; the goal sets the surplus/deficit).
+
+    Calories: bulk = lean surplus, cut = deficit, athletic = slight surplus,
+    maintain = TDEE. Protein: goal-based grams per kg of bodyweight.
+    """
+    g = str(goal or "maintain").lower()
+    w = float(weight_kg) if weight_kg else 70.0
+    if any(x in g for x in ["bulk", "gain", "muscle"]):
+        calories, protein_per_kg = tdee + 350, 1.8
+    elif any(x in g for x in ["cut", "lose", "loss", "shred", "fat"]):
+        calories, protein_per_kg = max(1200.0, tdee - 500), 2.2
+    elif any(x in g for x in ["athletic", "perform", "endur", "sport"]):
+        calories, protein_per_kg = tdee + 150, 1.8
+    else:  # maintain / general fitness
+        calories, protein_per_kg = tdee, 1.6
+    return round(calories), round(w * protein_per_kg)
+
+
 async def fetch_supabase_table(
     table: str, query: str, token: str | None = None
 ) -> list[dict]:
@@ -658,6 +681,9 @@ async def get_dashboard(
         height_cm=profile.get("height_cm"),
         workout_frequency=profile.get("workout_frequency"),
     )
+    # Goal-adjusted daily targets shown to the user (surplus for bulk, deficit
+    # for cut, etc.). `tdee` itself stays maintenance for the deficit charts.
+    calorie_target, protein_target = goal_adjusted_targets(tdee, profile_weight, goal)
 
     week_ago = (datetime.utcnow() - timedelta(days=6)).date().isoformat()
     month_ago = (datetime.utcnow() - timedelta(days=29)).date().isoformat()
@@ -823,8 +849,8 @@ async def get_dashboard(
         carbs=today_carbs,
         fat=today_fat,
         sessions=int(daily_sessions[-1]) if daily_sessions else 0,
-        calorie_target=tdee,
-        protein_target=round((profile_weight or 70) * 1.8, 0),
+        calorie_target=calorie_target,
+        protein_target=protein_target,
         weight=latest_weight,
         weight_change=weight_change_total,
         body_fat=latest_bf,

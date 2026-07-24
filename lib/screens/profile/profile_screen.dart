@@ -7,6 +7,7 @@ import '../../services/app_state_service.dart';
 import '../../services/split_service.dart';
 import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/theme_controller.dart';
 import '../../utils/snackbar.dart';
 
 const _appVersion = '1.0.0';
@@ -52,8 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _editChoice(
     String title,
     String key,
-    List<(String, String)> options, // (label, storedValue)
-    {
+    List<(String, String)> options, { // (label, storedValue)
     // Overrides for settings that don't live in user_profiles
     // (e.g. the training split, stored as a device preference).
     String? currentOverride,
@@ -121,8 +121,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final initial = stored == null
         ? ''
         : storeToDisplay != null
-            ? storeToDisplay(stored).toStringAsFixed(decimal ? 1 : 0)
-            : '${_profile[key]}';
+        ? storeToDisplay(stored).toStringAsFixed(decimal ? 1 : 0)
+        : '${_profile[key]}';
     final ctrl = TextEditingController(text: initial);
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -147,8 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextField(
               controller: ctrl,
               autofocus: true,
-              keyboardType:
-                  TextInputType.numberWithOptions(decimal: decimal),
+              keyboardType: TextInputType.numberWithOptions(decimal: decimal),
               decoration: InputDecoration(suffixText: suffix),
             ),
             const SizedBox(height: 20),
@@ -166,9 +165,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : int.tryParse(ctrl.text);
       if (value != null) {
         final toStore = displayToStore != null
-            ? double.parse(
-                displayToStore(value.toDouble()).toStringAsFixed(2),
-              )
+            ? double.parse(displayToStore(value.toDouble()).toStringAsFixed(2))
             : value;
         await _save(key, toStore);
       }
@@ -386,8 +383,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _detailRow(
                     'Height',
                     _display('height_cm', suffix: 'cm'),
-                    () => _editNumber('Height', 'height_cm',
-                        decimal: true, suffix: 'cm'),
+                    () => _editNumber(
+                      'Height',
+                      'height_cm',
+                      decimal: true,
+                      suffix: 'cm',
+                    ),
                   ),
                   _detailRow(
                     'Weight',
@@ -442,8 +443,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                       currentOverride: _split.name,
                       onPick: (value) async {
-                        final split = TrainingSplit.values
-                            .firstWhere((s) => s.name == value);
+                        final split = TrainingSplit.values.firstWhere(
+                          (s) => s.name == value,
+                        );
                         await SplitService.setSplit(split);
                         if (!mounted) return;
                         setState(() => _split = split);
@@ -455,6 +457,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   Text('APP', style: kLabelSmall),
                   const SizedBox(height: 4),
+                  ValueListenableBuilder<ThemeMode>(
+                    valueListenable: ThemeController.mode,
+                    builder: (context, mode, _) => _detailRow(
+                      'Appearance',
+                      mode == ThemeMode.light ? 'Light' : 'Dark',
+                      () => _editChoice(
+                        'Appearance',
+                        'appearance',
+                        const [('Dark', 'dark'), ('Light', 'light')],
+                        currentOverride: mode == ThemeMode.light
+                            ? 'light'
+                            : 'dark',
+                        onPick: (value) async {
+                          await ThemeController.set(
+                            value == 'light' ? ThemeMode.light : ThemeMode.dark,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                   _detailRow(
                     'Privacy Policy',
                     '',
@@ -508,10 +530,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   Text('ACCOUNT', style: kLabelSmall),
                   const SizedBox(height: 4),
-                  _detailRow('Log Out', '', _signOut,
-                      color: AppColors.textSecondary),
-                  _detailRow('Delete Account', '', _confirmDeleteAccount,
-                      color: AppColors.danger),
+                  _detailRow(
+                    'Log Out',
+                    '',
+                    _signOut,
+                    color: AppColors.textSecondary,
+                  ),
+                  _detailRow(
+                    'Delete Account',
+                    '',
+                    _confirmDeleteAccount,
+                    color: AppColors.danger,
+                  ),
                 ],
               ),
       ),
@@ -519,13 +549,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _goalLabel(String stored) => switch (stored) {
-        'bulk' => 'Build Muscle',
-        'cut' => 'Lose Fat',
-        'maintain' => 'Stay Fit',
-        'athletic' => 'Perform',
-        '' => 'Set',
-        _ => stored,
-      };
+    'bulk' => 'Build Muscle',
+    'cut' => 'Lose Fat',
+    'maintain' => 'Stay Fit',
+    'athletic' => 'Perform',
+    '' => 'Set',
+    _ => stored,
+  };
 
   Widget _detailRow(
     String label,
@@ -557,18 +587,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (value.isNotEmpty)
               Text(
                 value,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             if (onTap != null) ...[
               const SizedBox(width: 6),
-              Icon(
-                Icons.chevron_right,
-                color: AppColors.textMuted,
-                size: 18,
-              ),
+              Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
             ],
           ],
         ),

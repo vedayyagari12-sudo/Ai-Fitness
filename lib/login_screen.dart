@@ -14,24 +14,56 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final confirmController = TextEditingController();
   bool isLoading = false;
-  bool showPasswordStep = false;
+  bool isSignUp = false; // false = log in (default), true = create account
   String message = '';
   bool showResend = false; // offer "resend verification email"
 
-  Future<void> _continueWithEmail() async {
-    final email = emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => message = 'Please enter your email');
-      return;
-    }
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    confirmController.dispose();
+    super.dispose();
+  }
+
+  void _toggleMode() {
     setState(() {
-      showPasswordStep = true;
+      isSignUp = !isSignUp;
       message = '';
+      showResend = false;
+      confirmController.clear();
     });
   }
 
+  Future<void> _submit() => isSignUp ? _signUp() : _signIn();
+
+  /// Shared field validation before hitting the network.
+  String? _validate() {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      return 'Please enter a valid email address.';
+    }
+    if (password.isEmpty) return 'Please enter your password.';
+    if (isSignUp) {
+      if (password.length < 6) {
+        return 'Password must be at least 6 characters.';
+      }
+      if (password != confirmController.text.trim()) {
+        return 'Passwords don\'t match.';
+      }
+    }
+    return null;
+  }
+
   Future<void> _signIn() async {
+    final err = _validate();
+    if (err != null) {
+      setState(() => message = '❌ $err');
+      return;
+    }
     setState(() {
       isLoading = true;
       message = '';
@@ -55,14 +87,17 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } catch (e) {
-      setState(
-        () => message = '❌ Could not sign in — check your connection.',
-      );
+      setState(() => message = '❌ Could not sign in — check your connection.');
     }
     if (mounted) setState(() => isLoading = false);
   }
 
   Future<void> _signUp() async {
+    final err = _validate();
+    if (err != null) {
+      setState(() => message = '❌ $err');
+      return;
+    }
     setState(() {
       isLoading = true;
       message = '';
@@ -88,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (msg.contains('already registered') ||
             msg.contains('already exists')) {
           message =
-              '❌ This email already has an account. Sign in instead — or '
+              '❌ This email already has an account. Log in instead — or '
               'if you never verified it, resend the email below.';
           showResend = true;
         } else {
@@ -96,9 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } catch (e) {
-      setState(
-        () => message = '❌ Could not sign up — check your connection.',
-      );
+      setState(() => message = '❌ Could not sign up — check your connection.');
     }
     if (mounted) setState(() => isLoading = false);
   }
@@ -174,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Main Layout
+          // Main layout
           SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -193,13 +226,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
 
                     // FITAI wordmark
                     Center(
                       child: RichText(
                         text: TextSpan(
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 46,
                             fontWeight: FontWeight.w900,
                             letterSpacing: -2,
@@ -217,30 +250,111 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Text(
+                        isSignUp
+                            ? 'Create your account'
+                            : 'Log in to continue',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 36),
 
-                    // Inputs and Main Form section with cross-fade animation
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0.0, 0.05),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
+                    // Log In / Sign Up toggle
+                    _modeToggle(),
+                    const SizedBox(height: 24),
+
+                    // Email
+                    TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address',
+                        hintText: 'name@example.com',
+                        prefixIcon: Icon(Icons.mail_outline, size: 20),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Password
+                    TextField(
+                      controller: passwordController,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        hintText: isSignUp ? 'At least 6 characters' : null,
+                        prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                      ),
+                      obscureText: true,
+                      textInputAction: isSignUp
+                          ? TextInputAction.next
+                          : TextInputAction.done,
+                      onSubmitted: (_) => isSignUp ? null : _submit(),
+                    ),
+
+                    // Confirm password (sign up only)
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      child: isSignUp
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: confirmController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Confirm Password',
+                                    hintText: 'Re-enter your password',
+                                    prefixIcon: Icon(
+                                      Icons.lock_outline,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  obscureText: true,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => _submit(),
+                                ),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    ContinueButton(
+                      onPressed: isLoading ? null : _submit,
+                      label: isLoading
+                          ? (isSignUp ? 'Creating...' : 'Logging In...')
+                          : (isSignUp ? 'Create Account' : 'Log In'),
+                    ),
+
+                    // Toggle prompt
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          isSignUp
+                              ? 'Already have an account?'
+                              : "Don't have an account?",
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
                           ),
-                        );
-                      },
-                      child: !showPasswordStep
-                          ? _buildEmailStep()
-                          : _buildPasswordStep(),
+                        ),
+                        TextButton(
+                          onPressed: isLoading ? null : _toggleMode,
+                          child: Text(isSignUp ? 'Log in' : 'Sign up'),
+                        ),
+                      ],
                     ),
 
                     if (message.isNotEmpty) ...[
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -281,6 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                     ],
+
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -296,13 +411,61 @@ class _LoginScreenState extends State<LoginScreen> {
                         _legalLink(context, 'Terms of Service'),
                       ],
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// A pill segmented control: LOG IN | SIGN UP.
+  Widget _modeToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          _modeTab('LOG IN', !isSignUp, () {
+            if (isSignUp) _toggleMode();
+          }),
+          _modeTab('SIGN UP', isSignUp, () {
+            if (!isSignUp) _toggleMode();
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeTab(String label, bool active, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: isLoading ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? AppColors.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+              color: active ? Colors.white : AppColors.textMuted,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -330,84 +493,6 @@ class _LoginScreenState extends State<LoginScreen> {
           decorationColor: AppColors.textMuted,
         ),
       ),
-    );
-  }
-
-  Widget _buildEmailStep() {
-    return Column(
-      key: const ValueKey('email_step'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: emailController,
-          decoration: const InputDecoration(
-            labelText: 'Email Address',
-            hintText: 'name@example.com',
-            prefixIcon: Icon(Icons.mail_outline, size: 20),
-          ),
-          keyboardType: TextInputType.emailAddress,
-          textInputAction: TextInputAction.next,
-          onSubmitted: (_) => _continueWithEmail(),
-        ),
-        const SizedBox(height: 20),
-        ContinueButton(
-          onPressed: isLoading ? null : _continueWithEmail,
-          label: 'Continue',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordStep() {
-    return Column(
-      key: const ValueKey('password_step'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: emailController,
-          enabled: false,
-          decoration: const InputDecoration(
-            labelText: 'Email Address',
-            prefixIcon: Icon(Icons.mail_outline, size: 20),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: passwordController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Password',
-            prefixIcon: Icon(Icons.lock_outline, size: 20),
-          ),
-          obscureText: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _signIn(),
-        ),
-        const SizedBox(height: 20),
-        ContinueButton(
-          onPressed: isLoading ? null : _signIn,
-          label: isLoading ? 'Signing In...' : 'Sign In',
-        ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TextButton(
-              onPressed: isLoading ? null : _signUp,
-              child: const Text('Create Account'),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  showPasswordStep = false;
-                  passwordController.clear();
-                });
-              },
-              child: const Text('Change Email'),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

@@ -516,8 +516,9 @@ class _BodyStatsStepState extends State<_BodyStatsStep> {
     widget.data.heightCm = double.tryParse(_heightCtrl.text);
     // Entered in lbs; stored in kg (the database unit).
     final lbs = double.tryParse(_weightCtrl.text);
-    widget.data.weightKg =
-        lbs != null ? double.parse(lbsToKg(lbs).toStringAsFixed(2)) : null;
+    widget.data.weightKg = lbs != null
+        ? double.parse(lbsToKg(lbs).toStringAsFixed(2))
+        : null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.onChanged();
     });

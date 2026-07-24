@@ -18,10 +18,7 @@ class RecentScanThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: _card(),
-    );
+    return GestureDetector(onTap: onTap, child: _card());
   }
 
   Widget _card() {
@@ -59,7 +56,7 @@ class RecentScanThumb extends StatelessWidget {
                   ),
                   child: Text(
                     tag,
-                    style: const TextStyle(fontSize: 9, color: kTextMuted),
+                    style: TextStyle(fontSize: 11, color: kTextMuted),
                   ),
                 ),
               ),
@@ -70,8 +67,8 @@ class RecentScanThumb extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
+            style: TextStyle(
+              fontSize: 14,
               fontWeight: FontWeight.w600,
               color: kTextPrimary,
             ),
@@ -80,7 +77,7 @@ class RecentScanThumb extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10, color: kTextMuted),
+            style: TextStyle(fontSize: 13, color: kTextMuted),
           ),
         ],
       ),

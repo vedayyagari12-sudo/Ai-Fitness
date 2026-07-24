@@ -165,6 +165,41 @@ TextStyle secondaryTextStyle(BuildContext context, {double? fontSize}) {
   );
 }
 
+/// Page backdrop: a single cool bluish-white → black vertical gradient behind
+/// the content (see [kPageGradient]), so screens have depth without a flat
+/// void. The old breathing corner glows were removed per design direction.
+///
+/// [accent]/[accent2] are accepted for source-compatibility with existing call
+/// sites but are no longer painted.
+class AmbientBackground extends StatelessWidget {
+  const AmbientBackground({
+    super.key,
+    this.accent,
+    this.accent2,
+    required this.child,
+  });
+
+  final Color? accent;
+  final Color? accent2;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(gradient: kPageGradient),
+            ),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+
 class AppWarningCard extends StatelessWidget {
   const AppWarningCard({super.key, required this.title, required this.body});
 
@@ -865,9 +900,9 @@ class _FeatureHubTileState extends State<FeatureHubTile>
                         gradient: LinearGradient(
                           colors: [
                             Colors.transparent,
-                            Colors.white.withValues(alpha: 0.02),
-                            Colors.white.withValues(alpha: 0.08),
-                            Colors.white.withValues(alpha: 0.02),
+                            kFillSubtle,
+                            kFillMuted,
+                            kFillSubtle,
                             Colors.transparent,
                           ],
                           begin: const Alignment(-1.0, -0.3),

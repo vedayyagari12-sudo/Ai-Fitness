@@ -42,25 +42,25 @@ class PhysiqueMiniCard extends StatelessWidget {
               if (scanCount > 0)
                 Text(
                   '$scanCount scan${scanCount == 1 ? '' : 's'}',
-                  style: const TextStyle(fontSize: 9, color: kTextMuted),
+                  style: TextStyle(fontSize: 12, color: kTextMuted),
                 ),
             ],
           ),
           const SizedBox(height: 4),
           if (bodyFat == null) ...[
-            const Text(
+            Text(
               '—',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 30,
                 fontWeight: FontWeight.w700,
                 color: kTextMuted,
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Scan your physique in the SCAN tab to track body fat '
               'and your score',
-              style: TextStyle(fontSize: 11, color: kTextMuted),
+              style: TextStyle(fontSize: 13, color: kTextMuted),
             ),
           ] else ...[
             Row(
@@ -69,18 +69,18 @@ class PhysiqueMiniCard extends StatelessWidget {
                 Text(
                   '${bodyFat!.toStringAsFixed(1)}%',
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: kPink,
                     height: 1.0,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(bottom: 1),
                   child: Text(
                     'body fat',
-                    style: TextStyle(fontSize: 9, color: kTextMuted),
+                    style: TextStyle(fontSize: 12, color: kTextMuted),
                   ),
                 ),
               ],
@@ -89,12 +89,12 @@ class PhysiqueMiniCard extends StatelessWidget {
               const SizedBox(height: 3),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, size: 11, color: kLime),
+                  const Icon(Icons.star_rounded, size: 14, color: kLime),
                   const SizedBox(width: 3),
                   Text(
                     'Score $score/100',
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: kLime,
                     ),
@@ -106,10 +106,10 @@ class PhysiqueMiniCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 delta!,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 13,
                   color: deltaPositive ? kGreen : kPink,
                 ),
               ),
@@ -125,10 +125,7 @@ class PhysiqueMiniCard extends StatelessWidget {
                         scanCount <= 1
                             ? 'Scan again to unlock your trend'
                             : 'Trend appears after another scan',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          color: kTextMuted,
-                        ),
+                        style: TextStyle(fontSize: 12, color: kTextMuted),
                       ),
                     ),
             ),

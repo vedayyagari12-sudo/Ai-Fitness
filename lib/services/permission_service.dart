@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../theme/app_theme.dart';
+
 class PermissionService {
   /// Runtime permissions only exist on mobile. On web/desktop the OS/browser
   /// handles access at pick time, so we skip permission_handler entirely
@@ -67,29 +69,26 @@ class PermissionService {
     return showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
+        title: Text(
           'Camera & Photos Access',
           style: TextStyle(
-            color: Colors.white,
+            color: kTextPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 17,
           ),
         ),
-        content: const Text(
+        content: Text(
           'FitAI needs camera and photo library access to scan meals and analyse your physique.\n\nPlease allow access when prompted.',
-          style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14, height: 1.5),
+          style: TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
               'OK',
-              style: TextStyle(
-                color: Color(0xFF007AFF),
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: kBlue, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -101,27 +100,24 @@ class PermissionService {
     return showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
+        title: Text(
           'Permission Required',
           style: TextStyle(
-            color: Colors.white,
+            color: kTextPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 17,
           ),
         ),
-        content: const Text(
+        content: Text(
           'Camera and photo access has been denied.\n\nTo use scanning features, please enable access in your device Settings → Apps → FitAI → Permissions.',
-          style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14, height: 1.5),
+          style: TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Color(0xFF8E8E93)),
-            ),
+            child: Text('Cancel', style: TextStyle(color: kTextSecondary)),
           ),
           TextButton(
             onPressed: () {
@@ -130,10 +126,7 @@ class PermissionService {
             },
             child: const Text(
               'Open Settings',
-              style: TextStyle(
-                color: Color(0xFF007AFF),
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: kBlue, fontWeight: FontWeight.w600),
             ),
           ),
         ],

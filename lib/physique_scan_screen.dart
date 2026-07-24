@@ -57,8 +57,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
     }
   }
 
-  List<_PhotoSlot> get _filled =>
-      _slots.where((s) => s.file != null).toList();
+  List<_PhotoSlot> get _filled => _slots.where((s) => s.file != null).toList();
 
   Future<void> _pickFor(_PhotoSlot slot) async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -194,7 +193,12 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
   // ── Derived ────────────────────────────────────────────────────────────────
 
   static const _muscleOrder = [
-    'chest', 'back', 'shoulders', 'arms', 'legs', 'core',
+    'chest',
+    'back',
+    'shoulders',
+    'arms',
+    'legs',
+    'core',
   ];
 
   List<(String, int, String)> get _muscles {
@@ -440,15 +444,15 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
   }
 
   Widget _card({required Widget child}) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: child,
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: child,
+  );
 
   Widget _scoreHero() {
     final score = (result!['overall_score'] as num?)?.toInt() ?? 0;
@@ -599,13 +603,13 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                       child: LinearProgressIndicator(
                         value: v,
                         minHeight: 4,
-                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        backgroundColor: kFillSubtle,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           score >= 7
                               ? AppColors.success
                               : score >= 5
-                                  ? kGold
-                                  : AppColors.danger,
+                              ? kGold
+                              : AppColors.danger,
                         ),
                       ),
                     ),
@@ -627,10 +631,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                 padding: const EdgeInsets.only(top: 3, bottom: 10),
                 child: Text(
                   feedback,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
-                  ),
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
               )
             else

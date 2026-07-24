@@ -55,9 +55,10 @@ class _TrendCardState extends State<TrendCard> {
     final badge = _goalBadge;
     return Container(
       decoration: BoxDecoration(
-        color: kBgCard,
+        gradient: kHeroCardGradient(kSteel),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kBorder),
+        border: Border.all(color: kGlassBorder),
+        boxShadow: kGlassShadow,
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -71,10 +72,7 @@ class _TrendCardState extends State<TrendCard> {
                   color: badge.color.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 child: Text(
                   badge.label,
                   style: TextStyle(
@@ -149,7 +147,7 @@ class _TrendCardState extends State<TrendCard> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             hint,
-            style: const TextStyle(fontSize: 12, color: kTextMuted),
+            style: TextStyle(fontSize: 13, color: kTextMuted),
             textAlign: TextAlign.center,
           ),
         ),
@@ -162,6 +160,19 @@ class _TrendCardState extends State<TrendCard> {
     if (s.length <= 3) return s;
     return '${s.substring(0, s.length - 3)},${s.substring(s.length - 3)}';
   }
+
+  /// Short form for on-chart labels, so values stay readable in a narrow
+  /// bar (12,480 → "12.5k").
+  String _compact(num v) {
+    final n = v.round();
+    if (n.abs() >= 10000) return '${(n / 1000).toStringAsFixed(1)}k';
+    return '$n';
+  }
+
+  /// Value labels drawn permanently above each bar/point. Rendered as a
+  /// tooltip with a transparent background so it reads as a plain number.
+  static TextStyle get _valueLabelStyle =>
+      TextStyle(color: kTextPrimary, fontSize: 17, fontWeight: FontWeight.w800);
 
   // ── CALORIES ────────────────────────────────────────────────────────────
 
@@ -177,7 +188,7 @@ class _TrendCardState extends State<TrendCard> {
     final avgPct = logged.isEmpty || target <= 0
         ? 0
         : (logged.reduce((a, b) => a + b) / logged.length / target * 100)
-            .round();
+              .round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,8 +201,8 @@ class _TrendCardState extends State<TrendCard> {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   _formatThousands(today.round()),
-                  style: const TextStyle(
-                    fontSize: 32,
+                  style: TextStyle(
+                    fontSize: 38,
                     fontWeight: FontWeight.w800,
                     color: kTextPrimary,
                     height: 1.0,
@@ -204,7 +215,7 @@ class _TrendCardState extends State<TrendCard> {
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
                 '/ ${_formatThousands(target.round())} kcal today',
-                style: const TextStyle(fontSize: 13, color: kTextSecondary),
+                style: kStatCaption,
               ),
             ),
           ],
@@ -214,7 +225,7 @@ class _TrendCardState extends State<TrendCard> {
           logged.isEmpty
               ? 'No calories logged yet this week'
               : 'Averaging $avgPct% of your target this week',
-          style: const TextStyle(fontSize: 11, color: kTextMuted),
+          style: TextStyle(fontSize: 13, color: kTextMuted),
         ),
         const SizedBox(height: 14),
         SizedBox(height: 120, child: BarChart(_calorieBars())),
@@ -251,27 +262,30 @@ class _TrendCardState extends State<TrendCard> {
   BarChartData _calorieBars() {
     final cals = widget.dailyCalories;
     final target = widget.calorieTarget;
-    final maxVal = [
-      target * 1.25,
-      ...cals,
-    ].reduce((a, b) => a > b ? a : b);
+    final maxVal = [target * 1.25, ...cals].reduce((a, b) => a > b ? a : b);
 
     return BarChartData(
-      maxY: maxVal * 1.1,
+      // Headroom so the always-on value labels aren't clipped.
+      maxY: maxVal * 1.5,
       minY: 0,
       gridData: const FlGridData(show: false),
       borderData: FlBorderData(show: false),
+      // Values are always visible above each bar — no tap-and-hold needed.
       barTouchData: BarTouchData(
+        enabled: false,
         touchTooltipData: BarTouchTooltipData(
-          getTooltipColor: (_) => kBgElevated,
-          getTooltipItem: (group, _, rod, _) => BarTooltipItem(
-            '${rod.toY.round()} kcal',
-            const TextStyle(
-              color: kTextPrimary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          getTooltipColor: (_) => Colors.transparent,
+          tooltipPadding: EdgeInsets.zero,
+          tooltipMargin: 2,
+          getTooltipItem: (group, _, rod, _) {
+            final logged = cals[group.x] > 0;
+            return BarTooltipItem(
+              logged ? _compact(cals[group.x]) : '—',
+              _valueLabelStyle.copyWith(
+                color: logged ? _dayColor(cals[group.x]) : kTextMuted,
+              ),
+            );
+          },
         ),
       ),
       titlesData: FlTitlesData(
@@ -281,7 +295,7 @@ class _TrendCardState extends State<TrendCard> {
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 20,
+            reservedSize: 30,
             getTitlesWidget: (v, _) {
               final i = v.toInt();
               if (i < 0 || i >= widget.dayLabels.length) {
@@ -291,7 +305,7 @@ class _TrendCardState extends State<TrendCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   widget.dayLabels[i].toUpperCase(),
-                  style: const TextStyle(fontSize: 8, color: kTextMuted),
+                  style: kAxisLabel,
                 ),
               );
             },
@@ -313,6 +327,7 @@ class _TrendCardState extends State<TrendCard> {
         for (var i = 0; i < cals.length; i++)
           BarChartGroupData(
             x: i,
+            showingTooltipIndicators: const [0], // always-on value label
             barRods: [
               BarChartRodData(
                 // A visible grey stub marks "not logged" so it reads
@@ -340,10 +355,7 @@ class _TrendCardState extends State<TrendCard> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 9, color: kTextMuted),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: kTextMuted)),
       ],
     );
   }
@@ -383,7 +395,7 @@ class _TrendCardState extends State<TrendCard> {
           alignment: Alignment.centerLeft,
           child: Text(
             'Started ${lbsLabel(start)} lbs · Now ${lbsLabel(now)} lbs',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: kTextPrimary,
@@ -419,50 +431,71 @@ class _TrendCardState extends State<TrendCard> {
         show: true,
         drawVerticalLine: false,
         horizontalInterval: ((maxY - minY) / 3 + 0.001),
-        getDrawingHorizontalLine: (v) => FlLine(
-          color: Colors.white.withValues(alpha: 0.04),
-          strokeWidth: 1,
-        ),
+        getDrawingHorizontalLine: (v) =>
+            FlLine(color: kGridline, strokeWidth: 1),
       ),
       titlesData: const FlTitlesData(show: false),
       borderData: FlBorderData(show: false),
+      // Values sit on the chart permanently — no tap-and-hold required.
       lineTouchData: LineTouchData(
+        enabled: false,
         touchTooltipData: LineTouchTooltipData(
-          getTooltipColor: (_) => kBgElevated,
+          getTooltipColor: (_) => Colors.transparent,
+          tooltipPadding: EdgeInsets.zero,
+          tooltipMargin: 4,
           getTooltipItems: (spots) => [
             for (final s in spots)
               LineTooltipItem(
-                '${lbsLabel(s.y)} lbs',
-                const TextStyle(
-                  color: kTextPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+                lbsLabel(s.y),
+                _valueLabelStyle.copyWith(color: color),
               ),
           ],
         ),
       ),
-      lineBarsData: [
-        LineChartBarData(
-          spots: [
-            for (var i = 0; i < w.length; i++) FlSpot(i.toDouble(), w[i]),
-          ],
-          isCurved: true,
-          preventCurveOverShooting: true,
-          color: color,
-          barWidth: 2.5,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            gradient: LinearGradient(
-              colors: [color.withValues(alpha: 0.18), Colors.transparent],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
+      showingTooltipIndicators: [
+        for (final i in _labelIndices(w.length))
+          ShowingTooltipIndicators([
+            LineBarSpot(_weightBar(w, color), 0, FlSpot(i.toDouble(), w[i])),
+          ]),
       ],
+      lineBarsData: [_weightBar(w, color)],
     );
+  }
+
+  LineChartBarData _weightBar(List<double> w, Color color) {
+    return LineChartBarData(
+      spots: [for (var i = 0; i < w.length; i++) FlSpot(i.toDouble(), w[i])],
+      isCurved: true,
+      preventCurveOverShooting: true,
+      color: color,
+      barWidth: 2.5,
+      dotData: const FlDotData(show: true),
+      belowBarData: BarAreaData(
+        show: true,
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.18), Colors.transparent],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+    );
+  }
+
+  /// Which points get a permanent label. Labels every point when there are
+  /// few, otherwise thins them out (always keeping the latest) so a long
+  /// series stays readable instead of turning into a wall of numbers.
+  List<int> _labelIndices(int count) {
+    if (count <= 0) return const [];
+    if (count <= 6) return [for (var i = 0; i < count; i++) i];
+    const wanted = 5;
+    final step = (count - 1) / (wanted - 1);
+    final set = <int>{};
+    for (var k = 0; k < wanted; k++) {
+      set.add((k * step).round().clamp(0, count - 1));
+    }
+    set.add(count - 1); // always label the most recent value
+    final list = set.toList()..sort();
+    return list;
   }
 
   // ── VOLUME ──────────────────────────────────────────────────────────────
@@ -485,7 +518,7 @@ class _TrendCardState extends State<TrendCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Weekly Training Volume (lbs lifted)',
           style: TextStyle(
             fontSize: 13,
@@ -501,7 +534,7 @@ class _TrendCardState extends State<TrendCard> {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   '${_formatThousands(current.round())} lbs this week',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: kTextSecondary,
@@ -533,21 +566,29 @@ class _TrendCardState extends State<TrendCard> {
     final maxVal = vols.reduce((a, b) => a > b ? a : b);
 
     return BarChartData(
-      maxY: maxVal * 1.15 + 1,
+      // Headroom for the always-on value labels.
+      maxY: maxVal * 1.55 + 1,
       minY: 0,
       gridData: const FlGridData(show: false),
       borderData: FlBorderData(show: false),
+      // Always-on value labels above each week's bar.
       barTouchData: BarTouchData(
+        enabled: false,
         touchTooltipData: BarTouchTooltipData(
-          getTooltipColor: (_) => kBgElevated,
-          getTooltipItem: (group, _, rod, _) => BarTooltipItem(
-            '${_formatThousands(rod.toY.round())} lbs',
-            const TextStyle(
-              color: kTextPrimary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          getTooltipColor: (_) => Colors.transparent,
+          tooltipPadding: EdgeInsets.zero,
+          tooltipMargin: 2,
+          getTooltipItem: (group, _, rod, _) {
+            final logged = vols[group.x] > 0;
+            return BarTooltipItem(
+              logged ? _compact(vols[group.x]) : '—',
+              _valueLabelStyle.copyWith(
+                color: logged
+                    ? (group.x == vols.length - 1 ? kCyan : kTextSecondary)
+                    : kTextMuted,
+              ),
+            );
+          },
         ),
       ),
       titlesData: FlTitlesData(
@@ -557,7 +598,7 @@ class _TrendCardState extends State<TrendCard> {
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 20,
+            reservedSize: 30,
             getTitlesWidget: (v, _) {
               final i = v.toInt();
               final weeksAgo = vols.length - 1 - i;
@@ -565,7 +606,7 @@ class _TrendCardState extends State<TrendCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   weeksAgo == 0 ? 'NOW' : '-${weeksAgo}w',
-                  style: const TextStyle(fontSize: 8, color: kTextMuted),
+                  style: kAxisLabel,
                 ),
               );
             },
@@ -576,6 +617,7 @@ class _TrendCardState extends State<TrendCard> {
         for (var i = 0; i < vols.length; i++)
           BarChartGroupData(
             x: i,
+            showingTooltipIndicators: const [0],
             barRods: [
               BarChartRodData(
                 toY: vols[i] > 0 ? vols[i] : maxVal * 0.03,
@@ -586,8 +628,8 @@ class _TrendCardState extends State<TrendCard> {
                 color: i == vols.length - 1
                     ? kCyan
                     : (vols[i] > 0
-                        ? kCyan.withValues(alpha: 0.45)
-                        : kBgHighlight),
+                          ? kCyan.withValues(alpha: 0.45)
+                          : kBgHighlight),
               ),
             ],
           ),

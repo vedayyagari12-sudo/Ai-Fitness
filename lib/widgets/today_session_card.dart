@@ -8,12 +8,14 @@ class TodaySessionCard extends StatelessWidget {
     this.title = 'Upper Push',
     this.meta = '48 min · 7 moves',
     this.note = 'Tuned to your physique scan',
+    this.startLabel = 'Start →',
     this.onStart,
   });
 
   final String title;
   final String meta;
   final String note;
+  final String startLabel;
   final VoidCallback? onStart;
 
   @override
@@ -32,21 +34,15 @@ class TodaySessionCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 15,
+            style: TextStyle(
+              fontSize: 17,
               fontWeight: FontWeight.w700,
               color: kTextPrimary,
             ),
           ),
-          Text(
-            meta,
-            style: const TextStyle(fontSize: 12, color: kTextSecondary),
-          ),
+          Text(meta, style: kStatCaption),
           if (note.isNotEmpty)
-            Text(
-              note,
-              style: const TextStyle(fontSize: 11, color: kTextMuted),
-            ),
+            Text(note, style: TextStyle(fontSize: 13, color: kTextMuted)),
           const SizedBox(height: 10),
           GestureDetector(
             onTap: onStart,
@@ -56,9 +52,9 @@ class TodaySessionCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: const Text(
-                'Start →',
-                style: TextStyle(
+              child: Text(
+                startLabel,
+                style: const TextStyle(
                   color: Colors.black,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,

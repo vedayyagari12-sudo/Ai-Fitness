@@ -17,7 +17,10 @@ import '../../utils/snackbar.dart';
 /// AI-generated training session — the TODAY sub-tab of TRAIN.
 /// The plan is built automatically from the user's profile and physique scan.
 class AiSessionView extends StatefulWidget {
-  const AiSessionView({super.key});
+  const AiSessionView({super.key, this.onViewHistory});
+
+  /// Jumps to the HISTORY segment (provided by WorkoutsTabScreen).
+  final VoidCallback? onViewHistory;
 
   @override
   State<AiSessionView> createState() => _AiSessionViewState();
@@ -42,6 +45,44 @@ class _GeneratedExercise {
   bool checked = false;
 }
 
+/// Today's session state, kept outside the widget so leaving and re-entering
+/// the TRAIN tab (MainScreen disposes tab subtrees) doesn't wipe a finished
+/// workout or burn another AI generation. Cleared automatically on a new day.
+class _SessionCache {
+  static String? _dayKey;
+  static Map<String, dynamic>? workout;
+  static List<_GeneratedExercise> exercises = [];
+  static Set<String> lagging = {};
+  static bool started = false;
+  static bool completed = false;
+  static int completedCount = 0;
+  static bool restOverride = false; // user asked to train on a rest day
+  static String focus = '';
+
+  static String get _today {
+    final n = DateTime.now();
+    return '${n.year}-${n.month}-${n.day}';
+  }
+
+  /// Drop yesterday's session so each day starts fresh.
+  static void ensureToday() {
+    if (_dayKey != _today) {
+      _dayKey = _today;
+      workout = null;
+      exercises = [];
+      lagging = {};
+      started = false;
+      completed = false;
+      completedCount = 0;
+      restOverride = false;
+      focus = '';
+    }
+  }
+
+  /// True when there's something worth restoring instead of regenerating.
+  static bool get hasSession => workout != null || completed;
+}
+
 class _AiSessionViewState extends State<AiSessionView> {
   Map<String, dynamic>? workout;
   List<_GeneratedExercise> mainExercises = [];
@@ -49,16 +90,60 @@ class _AiSessionViewState extends State<AiSessionView> {
   bool isLoading = false;
   bool isSaving = false;
   bool _started = false; // true once the user has begun ticking off exercises
+  int _completedCountLogged = 0; // exercises logged in the finished session
+  bool _completed = false; // show the "workout logged" confirmation view
+  bool _isRestDay = false;
+  bool _restOverride = false; // user chose to train anyway on a rest day
   String error = '';
 
-  // Note: a fresh session is generated every time the TRAIN tab is entered
-  // (MainScreen swaps tab subtrees, so initState reruns) — that is also how
-  // a new physique scan reaches the session, since scans happen on the SCAN
-  // tab while this widget is unmounted.
   @override
   void initState() {
     super.initState();
-    _generate();
+    _restore();
+  }
+
+  /// Rehydrate today's session from the cache; only generate when there
+  /// genuinely isn't one yet.
+  Future<void> _restore() async {
+    _SessionCache.ensureToday();
+    final split = await SplitService.getSplit();
+    if (!mounted) return;
+
+    _isRestDay = SplitService.isRestDay(split);
+    _restOverride = _SessionCache.restOverride;
+
+    if (_SessionCache.hasSession) {
+      setState(() {
+        workout = _SessionCache.workout;
+        mainExercises = _SessionCache.exercises;
+        _lagging = _SessionCache.lagging;
+        _started = _SessionCache.started;
+        _completed = _SessionCache.completed;
+        _completedCountLogged = _SessionCache.completedCount;
+        _focus = _SessionCache.focus.isNotEmpty
+            ? _SessionCache.focus
+            : SplitService.focusForToday(split);
+      });
+      return;
+    }
+
+    // Rest day: show the recovery view rather than auto-generating.
+    if (_isRestDay && !_restOverride) {
+      setState(() => _focus = SplitService.rest);
+      return;
+    }
+    await _generate();
+  }
+
+  void _cache() {
+    _SessionCache.workout = workout;
+    _SessionCache.exercises = mainExercises;
+    _SessionCache.lagging = _lagging;
+    _SessionCache.started = _started;
+    _SessionCache.completed = _completed;
+    _SessionCache.completedCount = _completedCountLogged;
+    _SessionCache.restOverride = _restOverride;
+    _SessionCache.focus = _focus;
   }
 
   // ── Data ────────────────────────────────────────────────────────────────
@@ -67,6 +152,31 @@ class _AiSessionViewState extends State<AiSessionView> {
   String _focus = 'Full Body';
 
   Future<void> _loadLagging() async {
+    // Scan-first: FOCUS means "your scan scored this muscle weak" (< 7/10).
+    // A strong muscle that merely ranks lowest is maintenance, not a lag.
+    final scans = await getPhysiqueScans();
+    if (scans.isNotEmpty) {
+      final latest = scans.last;
+      const keys = {
+        'chest': 'chest_score',
+        'back': 'back_score',
+        'shoulders': 'shoulders_score',
+        'arms': 'arms_score',
+        'legs': 'legs_score',
+        'core': 'core_score',
+      };
+      final weak =
+          keys.entries
+              .map(
+                (e) => MapEntry(e.key, (latest[e.value] as num?)?.toDouble()),
+              )
+              .where((e) => e.value != null && e.value! < 7)
+              .toList()
+            ..sort((a, b) => a.value!.compareTo(b.value!));
+      _lagging = weak.take(2).map((e) => e.key).toSet();
+      return;
+    }
+    // No scan yet — fall back to the two least-trained groups by volume.
     final muscle = await getMuscleBalance();
     final groups = muscle?['groups'] as Map<String, dynamic>? ?? {};
     if (groups.isEmpty) return;
@@ -75,7 +185,6 @@ class _AiSessionViewState extends State<AiSessionView> {
             .map((e) => MapEntry(e.key, (e.value as num).toDouble()))
             .toList()
           ..sort((a, b) => a.value.compareTo(b.value));
-    // The two least-trained groups are "lagging".
     _lagging = entries.take(2).map((e) => e.key.toLowerCase()).toSet();
   }
 
@@ -86,9 +195,16 @@ class _AiSessionViewState extends State<AiSessionView> {
       workout = null;
       mainExercises = [];
       _started = false;
+      _completed = false;
     });
 
-    _focus = SplitService.focusForToday(await SplitService.getSplit());
+    final split = await SplitService.getSplit();
+    _isRestDay = SplitService.isRestDay(split);
+    // On a rest day the user explicitly asked for a session — pick a
+    // sensible focus instead of asking the AI to program "Rest".
+    _focus = _isRestDay
+        ? _focusForRestOverride(split)
+        : SplitService.focusForToday(split);
     await _loadLagging();
 
     try {
@@ -129,7 +245,22 @@ class _AiSessionViewState extends State<AiSessionView> {
     } catch (e) {
       if (mounted) setState(() => error = 'Network error. Pull to retry.');
     }
-    if (mounted) setState(() => isLoading = false);
+    if (mounted) {
+      setState(() => isLoading = false);
+      _cache();
+    }
+  }
+
+  /// The next training focus in the rotation — used when someone chooses to
+  /// train on a scheduled rest day.
+  String _focusForRestOverride(TrainingSplit split) {
+    final r = SplitService.rotation(split);
+    final today = (DateTime.now().weekday - 1) % r.length;
+    for (var step = 1; step <= r.length; step++) {
+      final f = r[(today + step) % r.length];
+      if (f != SplitService.rest) return f;
+    }
+    return 'Full Body';
   }
 
   void _parseMainExercises(Map<String, dynamic> data) {
@@ -159,11 +290,13 @@ class _AiSessionViewState extends State<AiSessionView> {
         e.checked = false;
       }
     });
+    _cache();
   }
 
   void _toggleExercise(int i) {
     HapticFeedback.selectionClick();
     setState(() => mainExercises[i].checked = !mainExercises[i].checked);
+    _cache();
   }
 
   /// Step 2 — log only the exercises the user actually completed.
@@ -186,22 +319,23 @@ class _AiSessionViewState extends State<AiSessionView> {
     setState(() => isSaving = false);
     if (ok) {
       HapticFeedback.heavyImpact();
-      final n = done.length;
-      setState(() => _started = false);
       triggerTodayRefresh();
       triggerHistoryRefresh();
-      AppSnackbar.success(
-        context,
-        '$n exercise${n == 1 ? '' : 's'} logged — nice work 💪',
-      );
+      // Show an explicit confirmation view — the user should never wonder
+      // whether the workout actually saved.
+      setState(() {
+        _started = false;
+        _completedCountLogged = done.length;
+        _completed = true;
+      });
+      _cache();
     } else {
       AppSnackbar.error(context, 'Could not log session');
     }
   }
 
   // ── Derived metrics ──────────────────────────────────────────────────────
-  int get _estLoad =>
-      mainExercises.fold(0, (sum, e) => sum + e.sets * e.reps);
+  int get _estLoad => mainExercises.fold(0, (sum, e) => sum + e.sets * e.reps);
 
   String _canon(String? raw) {
     final g = (raw ?? '').toLowerCase();
@@ -265,13 +399,234 @@ class _AiSessionViewState extends State<AiSessionView> {
   // ── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final showRest = _isRestDay && !_restOverride && !_completed;
     return RefreshIndicator(
-      onRefresh: _generate,
+      onRefresh: () async {
+        // Don't silently burn a generation on a rest day.
+        if (_isRestDay && !_restOverride) return;
+        await _generate();
+      },
       color: kCyan,
       backgroundColor: kBgCard,
       child: isLoading
           ? _loadingState()
+          : showRest
+          ? _restDayView()
+          : _completed
+          ? _completedView()
           : (workout == null ? _errorState() : _sessionView()),
+    );
+  }
+
+  /// Scheduled recovery day — the split has today off. Treated as a completed
+  /// state (nothing to do), with an escape hatch to train anyway.
+  Widget _restDayView() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: kCyan.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kCyan.withValues(alpha: 0.35)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: kCyan.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.bedtime_rounded,
+                  size: 38,
+                  color: kCyan,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kCyan.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'SCHEDULED RECOVERY',
+                  style: TextStyle(
+                    color: kCyan,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Rest Day',
+                style: TextStyle(
+                  color: kTextPrimary,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Your training split plans today as a recovery day, so there '
+                "isn't a workout to do. Take the day off — or tap Train "
+                'anyway below to add an extra session.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 52,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              setState(() => _restOverride = true);
+              _cache();
+              _generate();
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kCyan,
+              side: const BorderSide(color: kCyan),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.bolt_rounded, size: 20),
+            label: const Text(
+              'Train anyway',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            'Generates the next session in your split',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Post-workout confirmation — unmistakable "it saved" feedback with a
+  /// summary and clear next steps.
+  Widget _completedView() {
+    final n = _completedCountLogged;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: kLime.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kLime.withValues(alpha: 0.4)),
+            boxShadow: [
+              BoxShadow(
+                color: kLime.withValues(alpha: 0.12),
+                blurRadius: 40,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      // Tinted green disc with a solid green check — reads in
+                      // both themes and stays on-brand (never white/black).
+                      color: kLime.withValues(alpha: 0.20),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: kLime.withValues(alpha: 0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 44,
+                      color: kLime,
+                    ),
+                  )
+                  .animate()
+                  .scale(
+                    begin: const Offset(0.4, 0.4),
+                    end: const Offset(1, 1),
+                    duration: 450.ms,
+                    curve: Curves.elasticOut,
+                  )
+                  .fadeIn(duration: 150.ms),
+              const SizedBox(height: 18),
+              Text(
+                'Workout logged!',
+                style: TextStyle(
+                  color: kTextPrimary,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$n exercise${n == 1 ? '' : 's'} saved to your history — '
+                'your dashboard and streak are updated.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.05, end: 0),
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: _generate,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kLime,
+              foregroundColor: Colors.black,
+            ),
+            icon: const Icon(Icons.bolt_rounded, size: 20),
+            label: const Text(
+              'Generate another session',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        if (widget.onViewHistory != null) ...[
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: widget.onViewHistory,
+            child: Text(
+              'View it in your history →',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -380,7 +735,12 @@ class _AiSessionViewState extends State<AiSessionView> {
           children[i]
               .animate()
               .fadeIn(duration: 320.ms, delay: (i * 35).ms)
-              .slideY(begin: 0.05, end: 0, duration: 320.ms, delay: (i * 35).ms),
+              .slideY(
+                begin: 0.05,
+                end: 0,
+                duration: 320.ms,
+                delay: (i * 35).ms,
+              ),
       ],
     );
   }
@@ -389,10 +749,7 @@ class _AiSessionViewState extends State<AiSessionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "TODAY'S SESSION · ${focus.toUpperCase()}",
-          style: kLabelSmall,
-        ),
+        Text("TODAY'S SESSION · ${focus.toUpperCase()}", style: kLabelSmall),
         const SizedBox(height: 8),
         Text(
           name?.isNotEmpty == true ? name! : '$focus Session',
@@ -432,7 +789,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                   value,
                   style: TextStyle(
                     color: valueColor ?? AppColors.textPrimary,
-                    fontSize: 24,
+                    fontSize: 30,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -1,
                     height: 1.0,
@@ -444,7 +801,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                     unit,
                     style: TextStyle(
                       color: AppColors.textMuted,
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -459,7 +816,7 @@ class _AiSessionViewState extends State<AiSessionView> {
               label,
               style: TextStyle(
                 color: AppColors.textMuted,
-                fontSize: 9.5,
+                fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.0,
               ),
@@ -471,42 +828,60 @@ class _AiSessionViewState extends State<AiSessionView> {
   }
 
   Widget _whyCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+    // NOTE: a non-uniform Border (thick left accent + faint other sides)
+    // combined with borderRadius makes Flutter throw during paint(), which
+    // silently blanks the card's content. Round the corners with a ClipRRect
+    // instead and draw the accent stripe as its own element.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
         color: kCyan.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border(
-          left: BorderSide(color: kCyan, width: 3),
-          top: BorderSide(color: kCyan.withValues(alpha: 0.2)),
-          right: BorderSide(color: kCyan.withValues(alpha: 0.2)),
-          bottom: BorderSide(color: kCyan.withValues(alpha: 0.2)),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.auto_awesome_rounded, size: 14, color: kCyan),
-              const SizedBox(width: 6),
-              Text(
-                'WHY THIS SESSION',
-                style: kLabelSmall.copyWith(color: kCyan),
+              Container(width: 3, color: kCyan),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 14,
+                            color: kCyan,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'WHY THIS SESSION',
+                            style: kLabelSmall.copyWith(color: kCyan),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _whyText,
+                        // Capped so a long AI explanation can't balloon the card.
+                        maxLines: 8,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: kTextPrimary,
+                          fontSize: 13.5,
+                          height: 1.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            _whyText,
-            style: TextStyle(
-              color: AppColors.textPrimary.withValues(alpha: 0.9),
-              fontSize: 13.5,
-              height: 1.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -551,7 +926,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                         '${i + 1}',
                         style: TextStyle(
                           color: AppColors.textMuted,
-                          fontSize: 14,
+                          fontSize: 17,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -579,10 +954,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                             ),
                           ),
                         ),
-                        if (focus) ...[
-                          const SizedBox(width: 8),
-                          _focusTag(),
-                        ],
+                        if (focus) ...[const SizedBox(width: 8), _focusTag()],
                       ],
                     ),
                     if ((e.muscleGroup ?? '').isNotEmpty) ...[
@@ -605,7 +977,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                 '${e.sets} × ${e.repsRaw}',
                 style: TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 14,
+                  fontSize: 17,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -650,7 +1022,7 @@ class _AiSessionViewState extends State<AiSessionView> {
         'FOCUS',
         style: TextStyle(
           color: kPink,
-          fontSize: 9,
+          fontSize: 11,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.6,
         ),
@@ -703,7 +1075,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                       color: _lagging.contains(g)
                           ? kPink
                           : AppColors.textPrimary,
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -745,7 +1117,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                   : 'Select all',
               style: const TextStyle(
                 color: kCyan,
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
               ),
             ),

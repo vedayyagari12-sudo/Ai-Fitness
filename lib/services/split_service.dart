@@ -24,30 +24,66 @@ class SplitService {
   }
 
   static String label(TrainingSplit s) => switch (s) {
-        TrainingSplit.ppl => 'Push / Pull / Legs',
-        TrainingSplit.upperLower => 'Upper / Lower',
-        TrainingSplit.fullBody => 'Full Body',
-        TrainingSplit.auto => 'Auto (balanced)',
-      };
+    TrainingSplit.ppl => 'Push / Pull / Legs',
+    TrainingSplit.upperLower => 'Upper / Lower',
+    TrainingSplit.fullBody => 'Full Body',
+    TrainingSplit.auto => 'Auto (balanced)',
+  };
+
+  /// Focus used when a split schedules recovery for the day.
+  static const rest = 'Rest';
+
+  /// Weekly rotation for a split, Monday first. Rest days are real parts of
+  /// the plan — muscle is built during recovery, not just training.
+  static List<String> rotation(TrainingSplit split) => switch (split) {
+    // Classic 6-on / 1-off push-pull-legs.
+    TrainingSplit.ppl => const [
+      'Push',
+      'Pull',
+      'Legs',
+      'Push',
+      'Pull',
+      'Legs',
+      rest,
+    ],
+    // 4-day upper/lower with recovery mid-week and on the weekend.
+    TrainingSplit.upperLower => const [
+      'Upper Body',
+      'Lower Body',
+      rest,
+      'Upper Body',
+      'Lower Body',
+      rest,
+      rest,
+    ],
+    // 3x/week full body with a rest day between each session.
+    TrainingSplit.fullBody => const [
+      'Full Body',
+      rest,
+      'Full Body',
+      rest,
+      'Full Body',
+      rest,
+      rest,
+    ],
+    // Balanced rotation with two recovery days.
+    TrainingSplit.auto => const [
+      'Push',
+      'Pull',
+      'Legs',
+      rest,
+      'Upper Body',
+      'Full Body',
+      rest,
+    ],
+  };
 
   /// Today's session focus for a split (Mon = first entry).
+  /// Returns [rest] when the split schedules a recovery day.
   static String focusForToday(TrainingSplit split) {
-    final rotation = switch (split) {
-      TrainingSplit.ppl => const [
-          'Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs', 'Full Body',
-        ],
-      TrainingSplit.upperLower => const [
-          'Upper Body', 'Lower Body', 'Upper Body', 'Lower Body',
-          'Upper Body', 'Lower Body', 'Full Body',
-        ],
-      TrainingSplit.fullBody => const [
-          'Full Body', 'Full Body', 'Full Body', 'Full Body',
-          'Full Body', 'Full Body', 'Full Body',
-        ],
-      TrainingSplit.auto => const [
-          'Push', 'Pull', 'Legs', 'Upper Body', 'Push', 'Full Body', 'Pull',
-        ],
-    };
-    return rotation[(DateTime.now().weekday - 1) % rotation.length];
+    final r = rotation(split);
+    return r[(DateTime.now().weekday - 1) % r.length];
   }
+
+  static bool isRestDay(TrainingSplit split) => focusForToday(split) == rest;
 }

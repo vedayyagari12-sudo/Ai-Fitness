@@ -96,7 +96,7 @@ class _StreakChipState extends State<StreakChip>
             Text(
               widget.count.toString(),
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: kOrange,
               ),

@@ -119,9 +119,7 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
                       Icon(
                         Icons.fitness_center_outlined,
                         size: 18,
-                        color: _exercise == null
-                            ? AppColors.textMuted
-                            : kCyan,
+                        color: _exercise == null ? AppColors.textMuted : kCyan,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -169,8 +167,9 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
                   Expanded(
                     child: TextField(
                       controller: _weightCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'Weight (lbs)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Weight (lbs)',
+                      ),
                       keyboardType: TextInputType.number,
                     ),
                   ),

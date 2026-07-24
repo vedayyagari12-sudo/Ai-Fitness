@@ -26,19 +26,34 @@ class AppSnackbar {
         elevation: 0,
         padding: EdgeInsets.zero,
         duration: const Duration(milliseconds: 2500),
-        content: Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border(left: BorderSide(color: accent, width: 3)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Text(
-            message,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+        // NOTE: a left-only (non-uniform) Border combined with borderRadius
+        // makes Flutter throw during paint(), which blanks the message. Round
+        // with a ClipRRect and draw the accent stripe as its own element.
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3, color: accent),
+                Expanded(
+                  child: Container(
+                    color: AppColors.surface,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
