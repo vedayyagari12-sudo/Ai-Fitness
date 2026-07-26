@@ -54,8 +54,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String title,
     String key,
     List<(String, String)> options, { // (label, storedValue)
-    // Overrides for settings that don't live in user_profiles
-    // (e.g. the training split, stored as a device preference).
+    // Overrides for settings whose canonical value lives outside the plain
+    // `_profile` map (e.g. the training split, which SplitService caches
+    // locally but also syncs to user_profiles.training_split).
     String? currentOverride,
     Future<void> Function(String value)? onPick,
   }) async {

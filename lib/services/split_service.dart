@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api_service.dart';
+
 /// The user's preferred training split — drives which focus the AI session
-/// generator uses each day. Stored locally as a device preference.
+/// generator uses each day. Cached locally for fast reads, and synced to the
+/// account profile so it follows the user across devices/browser sessions
+/// instead of living only in this device's local storage.
 enum TrainingSplit { auto, ppl, upperLower, fullBody }
 
 class SplitService {
@@ -9,18 +15,47 @@ class SplitService {
 
   static const _key = 'training_split';
 
+  /// Local-first read: instant on repeat visits. On a device/browser with no
+  /// local value yet (fresh install, or — on web — a dev server that landed
+  /// on a new origin/port and so a fresh localStorage) it falls back to
+  /// whatever's saved on the account profile, then caches that locally.
   static Future<TrainingSplit> getSplit() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
-    return TrainingSplit.values.firstWhere(
-      (s) => s.name == raw,
-      orElse: () => TrainingSplit.auto,
-    );
+    if (raw != null) {
+      return TrainingSplit.values.firstWhere(
+        (s) => s.name == raw,
+        orElse: () => TrainingSplit.auto,
+      );
+    }
+    final remote = await _fetchRemoteSplit();
+    if (remote != null) {
+      await prefs.setString(_key, remote.name);
+      return remote;
+    }
+    return TrainingSplit.auto;
   }
 
   static Future<void> setSplit(TrainingSplit split) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, split.name);
+    // Best-effort — don't block the UI on this write, and don't fail the
+    // local save if it errors (e.g. offline).
+    unawaited(upsertUserProfile({'training_split': split.name}));
+  }
+
+  static Future<TrainingSplit?> _fetchRemoteSplit() async {
+    try {
+      final profile = await getUserProfile();
+      final raw = profile?['training_split'] as String?;
+      if (raw == null) return null;
+      for (final s in TrainingSplit.values) {
+        if (s.name == raw) return s;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   static String label(TrainingSplit s) => switch (s) {

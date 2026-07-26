@@ -8,8 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'api_service.dart';
-import 'services/nav_service.dart' show mainTabIndex;
+import 'services/nav_service.dart' show mainTabIndex, triggerTodayRefresh;
 import 'services/permission_service.dart';
+import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
 import 'utils/snackbar.dart';
 
@@ -177,6 +178,10 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
               'it won\'t appear in BODY',
             );
           }
+        }
+        if (data['saved'] == true) {
+          TodayCache.invalidateActivity();
+          triggerTodayRefresh();
         }
       } else {
         setState(() => message = 'Could not analyze photos — try again.');

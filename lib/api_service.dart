@@ -319,6 +319,25 @@ Future<List<Map<String, dynamic>>> getPhysiqueScans() async {
   }
 }
 
+/// All calorie/meal logs for the signed-in user, newest first.
+/// Reads Supabase directly (RLS scopes rows to the user's JWT) — used by the
+/// TODAY "See all" sheet, which needs more history than the dashboard's
+/// 3-item preview.
+Future<List<Map<String, dynamic>>> getCalorieLogs() async {
+  final userId = getCurrentUserId();
+  if (userId == null) return [];
+  try {
+    final rows = await Supabase.instance.client
+        .from('calorie_logs')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+    return (rows as List).cast<Map<String, dynamic>>();
+  } catch (e) {
+    return [];
+  }
+}
+
 Future<Map<String, dynamic>?> getUserProfile() async {
   final userId = getCurrentUserId();
   if (userId == null) return null;

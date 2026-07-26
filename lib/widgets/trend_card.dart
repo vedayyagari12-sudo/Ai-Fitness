@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/units.dart';
 
-/// Dashboard trends card — three tabs, each with a headline number, a chart
+/// Dashboard trends card — four tabs, each with a headline number, a chart
 /// and a one-line plain-English takeaway:
 ///  · CALORIES — 7-day bars vs a dashed daily target, color-coded by how
 ///    close each day landed (grey = nothing logged that day)
@@ -12,6 +12,9 @@ import '../utils/units.dart';
 ///    colored by whether the trend matches the user's goal
 ///  · VOLUME   — weekly training volume (lbs lifted), last 8 weeks, with
 ///    week-over-week change
+///  · STRENGTH — estimated 1-rep max (Epley) from your heaviest set each
+///    week — a more direct "are you getting stronger" signal than volume
+///    alone, since volume can climb from doing more reps at the same weight.
 class TrendCard extends StatefulWidget {
   const TrendCard({
     super.key,
@@ -21,6 +24,7 @@ class TrendCard extends StatefulWidget {
     required this.dayLabels,
     required this.calorieTarget,
     required this.weeklyVolume,
+    this.weeklyStrength = const [],
   });
 
   final String goal; // "bulk" | "cut" | "maintain" | "athletic"
@@ -29,14 +33,15 @@ class TrendCard extends StatefulWidget {
   final List<String> dayLabels; // matching day labels ("Mon"…)
   final double calorieTarget; // kcal/day
   final List<double> weeklyVolume; // lbs lifted per week, oldest → newest
+  final List<double> weeklyStrength; // est. 1RM (lbs) per week, oldest→newest
 
   @override
   State<TrendCard> createState() => _TrendCardState();
 }
 
 class _TrendCardState extends State<TrendCard> {
-  int _selected = 0; // 0 CALORIES, 1 WEIGHT, 2 VOLUME
-  static const _segments = ['CALORIES', 'WEIGHT', 'VOLUME'];
+  int _selected = 0; // 0 CALORIES, 1 WEIGHT, 2 VOLUME, 3 STRENGTH
+  static const _segments = ['CALORIES', 'WEIGHT', 'VOLUME', 'STRENGTH'];
 
   ({String label, Color color}) get _goalBadge {
     final g = widget.goal.toLowerCase();
@@ -91,6 +96,7 @@ class _TrendCardState extends State<TrendCard> {
           switch (_selected) {
             1 => _weightView(),
             2 => _volumeView(),
+            3 => _strengthView(),
             _ => _caloriesView(),
           },
         ],
@@ -634,6 +640,252 @@ class _TrendCardState extends State<TrendCard> {
             ],
           ),
       ],
+    );
+  }
+
+  // ── STRENGTH ────────────────────────────────────────────────────────────
+
+  Widget _strengthView() {
+    final str = widget.weeklyStrength;
+    if (str.isEmpty || str.every((v) => v <= 0)) {
+      return _empty(
+        'Log a few heavy sets in the TRAIN tab to start tracking your '
+        'estimated 1-rep max',
+      );
+    }
+
+    final current = str.last;
+    final previous = str.length >= 2
+        ? str.reversed.skip(1).firstWhere((v) => v > 0, orElse: () => 0.0)
+        : 0.0;
+    final pctChange = previous > 0
+        ? ((current - previous) / previous * 100).round()
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => _showStrengthInfoSheet(context),
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Estimated 1-Rep Max (lbs)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: kTextPrimary,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Icon(
+                Icons.info_outline_rounded,
+                size: 14,
+                color: kTextMuted,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '${_formatThousands(current.round())} lbs this week',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kTextSecondary,
+                  ),
+                ),
+              ),
+            ),
+            if (pctChange != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                '${pctChange >= 0 ? '▲ +' : '▼ '}$pctChange% vs last logged',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: pctChange >= 0 ? kGreen : kPink,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(height: 120, child: BarChart(_strengthBars())),
+      ],
+    );
+  }
+
+  BarChartData _strengthBars() {
+    final str = widget.weeklyStrength;
+    final maxVal = str.reduce((a, b) => a > b ? a : b);
+
+    return BarChartData(
+      maxY: maxVal * 1.55 + 1,
+      minY: 0,
+      gridData: const FlGridData(show: false),
+      borderData: FlBorderData(show: false),
+      barTouchData: BarTouchData(
+        enabled: false,
+        touchTooltipData: BarTouchTooltipData(
+          getTooltipColor: (_) => Colors.transparent,
+          tooltipPadding: EdgeInsets.zero,
+          tooltipMargin: 2,
+          getTooltipItem: (group, _, rod, _) {
+            final logged = str[group.x] > 0;
+            return BarTooltipItem(
+              logged ? _compact(str[group.x]) : '—',
+              _valueLabelStyle.copyWith(
+                color: logged
+                    ? (group.x == str.length - 1 ? kPurple : kTextSecondary)
+                    : kTextMuted,
+              ),
+            );
+          },
+        ),
+      ),
+      titlesData: FlTitlesData(
+        leftTitles: const AxisTitles(),
+        topTitles: const AxisTitles(),
+        rightTitles: const AxisTitles(),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 30,
+            getTitlesWidget: (v, _) {
+              final i = v.toInt();
+              final weeksAgo = str.length - 1 - i;
+              return Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  weeksAgo == 0 ? 'NOW' : '-${weeksAgo}w',
+                  style: kAxisLabel,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      barGroups: [
+        for (var i = 0; i < str.length; i++)
+          BarChartGroupData(
+            x: i,
+            showingTooltipIndicators: const [0],
+            barRods: [
+              BarChartRodData(
+                toY: str[i] > 0 ? str[i] : maxVal * 0.03,
+                width: 14,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(4),
+                ),
+                color: i == str.length - 1
+                    ? kPurple
+                    : (str[i] > 0
+                          ? kPurple.withValues(alpha: 0.45)
+                          : kBgHighlight),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  void _showStrengthInfoSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('WHAT IS ESTIMATED 1-REP MAX?', style: kLabelSmall),
+            const SizedBox(height: 6),
+            Text(
+              'Your 1-rep max (1RM) is the heaviest weight you could lift '
+              'for exactly one rep. Actually testing that is slow and '
+              'risky, so instead we estimate it from the sets you\'re '
+              'already logging — no extra work, no maxing out.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kPurple.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kPurple.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'THE FORMULA (Epley)',
+                    style: kLabelSmall.copyWith(color: kPurple, fontSize: 10),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Est. 1RM = Weight × (1 + Reps ÷ 30)',
+                    style: TextStyle(
+                      color: kTextPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'EXAMPLE',
+              style: kLabelSmall.copyWith(fontSize: 10),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'You log 185 lbs for 8 reps.\n'
+              '185 × (1 + 8 ÷ 30) = 185 × 1.27 ≈ 234 lbs\n'
+              'That set is worth an estimated 234 lb 1RM — heavier weight '
+              'for fewer reps, or lighter weight for more reps, can add up '
+              'to a similar estimate.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Each week, we take your single heaviest estimate from '
+              'anything you logged that week — not an average — so the '
+              'chart tracks your peak strength, not a typical set. It\'s '
+              'an estimate to watch trend over time, not a number to '
+              'chase by itself.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 }

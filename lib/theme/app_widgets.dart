@@ -183,6 +183,13 @@ class AmbientBackground extends StatelessWidget {
   final Color? accent2;
   final Widget child;
 
+  /// Phone-frame content width on wide viewports (web/desktop). Real phones
+  /// are well under this in logical pixels, so the constraint never engages
+  /// on mobile — it only stops content stretching full-bleed across a
+  /// browser window, which otherwise leaves cards feeling small and far
+  /// apart with a large dead gap on either side.
+  static const double _maxContentWidth = 560;
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -194,7 +201,12 @@ class AmbientBackground extends StatelessWidget {
             ),
           ),
         ),
-        child,
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+            child: child,
+          ),
+        ),
       ],
     );
   }

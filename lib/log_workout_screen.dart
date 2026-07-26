@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'services/nav_service.dart'
     show triggerTodayRefresh, triggerHistoryRefresh;
+import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_widgets.dart';
 import 'utils/snackbar.dart';
@@ -68,6 +69,7 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
 
     if (success) {
       HapticFeedback.mediumImpact();
+      TodayCache.markTrainedToday();
       triggerTodayRefresh();
       triggerHistoryRefresh();
       setState(() => _saveState = 'success');

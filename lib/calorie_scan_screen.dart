@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 import 'services/nav_service.dart' show triggerTodayRefresh;
 import 'services/permission_service.dart';
+import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
 import 'widgets/deco.dart';
 import 'utils/snackbar.dart';
@@ -200,6 +201,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
       _savedToLog = saved;
     });
     if (saved) {
+      TodayCache.invalidateActivity();
       triggerTodayRefresh();
       AppSnackbar.success(context, "Added to today's log");
     } else {

@@ -10,6 +10,7 @@ import '../../api_service.dart';
 import '../../services/nav_service.dart'
     show triggerTodayRefresh, triggerHistoryRefresh;
 import '../../services/split_service.dart';
+import '../../services/today_cache.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
@@ -319,6 +320,7 @@ class _AiSessionViewState extends State<AiSessionView> {
     setState(() => isSaving = false);
     if (ok) {
       HapticFeedback.heavyImpact();
+      TodayCache.markTrainedToday();
       triggerTodayRefresh();
       triggerHistoryRefresh();
       // Show an explicit confirmation view — the user should never wonder

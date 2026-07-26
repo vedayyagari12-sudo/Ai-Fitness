@@ -253,12 +253,6 @@ class _BodyScreenState extends State<BodyScreen> {
     final leanLb = bf != null ? weightLb * (1 - bf / 100) : 0.0;
     final leanChgLb = bf != null ? weightChgLb * (1 - bf / 100) : 0.0;
 
-    final bfTrend = [
-      for (final s in _scans)
-        if (_bf(s) != null) _bf(s)!,
-    ];
-    final bfAllTime = bfTrend.length >= 2 ? bfTrend.last - bfTrend.first : 0.0;
-
     final sections = <Widget>[
       _header(),
       const SizedBox(height: 18),
@@ -322,7 +316,7 @@ class _BodyScreenState extends State<BodyScreen> {
         const SizedBox(height: 12),
         _muscleCard(),
         const SizedBox(height: 16),
-        _bfTrendCard(bfTrend, bfAllTime),
+        _muscleChangeCard(),
         if (_laggingNames.isNotEmpty) ...[
           const SizedBox(height: 16),
           _focusCta(),
@@ -783,8 +777,24 @@ class _BodyScreenState extends State<BodyScreen> {
     );
   }
 
-  Widget _bfTrendCard(List<double> trend, double allTime) {
-    final hasData = trend.length >= 2;
+  /// Per-muscle score change between the two most recent scans. Higher
+  /// training value than a second body-fat chart (body fat already has its
+  /// own tab in the metrics card below) — this shows exactly which muscle
+  /// groups are actually improving vs stalling, so training focus can
+  /// follow the data instead of a hunch.
+  Widget _muscleChangeCard() {
+    final prev = _previous;
+    final latest = _latest;
+    final deltas = <(String, double)>[
+      if (prev != null && latest != null)
+        for (final (name, key) in _muscleKeys)
+          if (latest[key] != null && prev[key] != null)
+            (
+              name,
+              (latest[key] as num).toDouble() - (prev[key] as num).toDouble(),
+            ),
+    ]..sort((a, b) => b.$2.compareTo(a.$2));
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -795,70 +805,86 @@ class _BodyScreenState extends State<BodyScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text('BODY FAT · ${trend.length} SCANS', style: kLabelSmall),
-              const Spacer(),
-              if (hasData)
-                Text(
-                  '${allTime <= 0 ? '' : '+'}${allTime.toStringAsFixed(1)}% all-time',
-                  style: TextStyle(
-                    color: allTime <= 0 ? kGreen : kPink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-            ],
-          ),
+          Text('MUSCLE CHANGE · LAST TWO SCANS', style: kLabelSmall),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 110,
-            child: hasData
-                ? _sparkline(trend)
-                : Center(
-                    child: Text(
-                      'Scan again to start your trend.',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-          ),
+          if (deltas.isEmpty)
+            SizedBox(
+              height: 100,
+              child: Center(
+                child: Text(
+                  _scans.length < 2
+                      ? 'Scan again to see which muscles are improving'
+                      : "Your last two scans don't share scored muscle "
+                            'groups to compare',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                ),
+              ),
+            )
+          else
+            for (final (name, delta) in deltas) _muscleChangeRow(name, delta),
         ],
       ),
     );
   }
 
-  Widget _sparkline(List<double> values) {
-    final spots = [
-      for (var i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
-    ];
-    final minY = values.reduce((a, b) => a < b ? a : b);
-    final maxY = values.reduce((a, b) => a > b ? a : b);
-    return LineChart(
-      LineChartData(
-        minY: minY - 0.6,
-        maxY: maxY + 0.6,
-        gridData: const FlGridData(show: false),
-        titlesData: const FlTitlesData(show: false),
-        borderData: FlBorderData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            curveSmoothness: 0.3,
-            preventCurveOverShooting: true,
-            color: kPink,
-            barWidth: 2.5,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: [kPink.withValues(alpha: 0.28), Colors.transparent],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+  Widget _muscleChangeRow(String name, double delta) {
+    final flat = delta == 0;
+    final improved = delta > 0;
+    final color = flat ? AppColors.textMuted : (improved ? kGreen : kPink);
+    // A ±3-point swing between two scans is a big move — normalize against
+    // that so the bar has visible range without needing a fixed axis.
+    final magnitude = (delta.abs() / 3.0).clamp(0.04, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 74,
+            child: Text(
+              name,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: kBgHighlight,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                FractionallySizedBox(
+                  widthFactor: magnitude,
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 46,
+            child: Text(
+              flat ? '—' : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1)}',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: color,
               ),
             ),
           ),

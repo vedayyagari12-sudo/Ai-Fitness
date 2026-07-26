@@ -316,18 +316,21 @@ class ReadinessCard extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
-          child: Text(value, style: kStatSmall.copyWith(color: valueColor)),
+          child: Text(
+            value,
+            style: kStatSmall.copyWith(fontSize: 29, color: valueColor),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: kLabelSmall.copyWith(fontSize: 12),
+          textAlign: align,
         ),
         const SizedBox(height: 2),
         Text(
-          label,
-          style: kLabelSmall.copyWith(fontSize: 11),
-          textAlign: align,
-        ),
-        const SizedBox(height: 1),
-        Text(
           sub,
-          style: kStatCaption.copyWith(color: subColor),
+          style: kStatCaption.copyWith(fontSize: 14, color: subColor),
           textAlign: align,
         ),
       ],

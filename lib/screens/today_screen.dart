@@ -6,6 +6,7 @@ import '../api_service.dart';
 import '../models/readiness_data.dart';
 import '../services/nav_service.dart';
 import '../services/split_service.dart';
+import '../services/today_cache.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import '../theme/theme_controller.dart';
@@ -32,6 +33,7 @@ class _TodayScreenState extends State<TodayScreen> {
   Map<String, dynamic>? _dash;
   Map<String, dynamic>? _streak;
   List<Map<String, dynamic>> _weeklySummary = [];
+  List<dynamic> _workouts = [];
   TrainingSplit _split = TrainingSplit.auto;
 
   @override
@@ -56,10 +58,12 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Future<void> _load() async {
+    TodayCache.ensureToday();
     final results = await Future.wait([
       getDashboard(),
       getStreak(),
       getWeeklySummary(),
+      getWorkouts(),
     ]);
     final split = await SplitService.getSplit();
     if (!mounted) return;
@@ -67,6 +71,7 @@ class _TodayScreenState extends State<TodayScreen> {
       _dash = results[0] as Map<String, dynamic>?;
       _streak = results[1] as Map<String, dynamic>?;
       _weeklySummary = (results[2] as List).cast<Map<String, dynamic>>();
+      _workouts = results[3] as List;
       _split = split;
       _loading = false;
     });
@@ -81,12 +86,18 @@ class _TodayScreenState extends State<TodayScreen> {
 
   String get _goal => (_dash?['goal'] as String?) ?? 'maintain';
 
+  int get _sessionsToday => _num(_stats['sessions']).toInt();
+
+  /// True once today's workout is logged — trusts the real dashboard count,
+  /// but ORs in the optimistic cache flag so the card flips the instant a
+  /// session is saved instead of waiting on a dashboard refetch to catch up.
+  bool get _trainedToday => _sessionsToday > 0 || TodayCache.trainedToday;
+
   ReadinessData get _readiness {
     // DAILY score — everything below is about TODAY only, so it naturally
     // resets to 0 each morning and 100 is achievable every single day:
     // train once (40%) + hit your calories (35%) + hit your protein (25%).
-    final sessionsToday = (_num(_stats['sessions'])).toInt();
-    final trained = sessionsToday > 0 ? 1.0 : 0.0;
+    final trained = _trainedToday ? 1.0 : 0.0;
 
     final kcal = _num(_stats['calories']);
     final kcalTarget = _num(_stats['calorie_target']);
@@ -123,7 +134,7 @@ class _TodayScreenState extends State<TodayScreen> {
       bodyFatDelta: bfChange != 0
           ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}%'
           : '',
-      trainingDetail: sessionsToday > 0
+      trainingDetail: _trainedToday
           ? 'Trained today ✓'
           : 'No workout yet today',
       fuelDetail: kcalTarget > 0
@@ -188,6 +199,33 @@ class _TodayScreenState extends State<TodayScreen> {
     for (final w in _weeklySummary.reversed)
       (w['total_volume'] as num?)?.toDouble() ?? 0.0,
   ];
+
+  /// Weekly estimated 1-rep max, oldest → newest (last 8 weeks) — the best
+  /// (highest) Epley estimate from any logged set that week. Computed
+  /// client-side from raw workout rows so it needs no backend change.
+  List<double> get _weeklyStrength {
+    const weeks = 8;
+    final best = List<double>.filled(weeks, 0.0);
+    final now = DateTime.now();
+    for (final w in _workouts) {
+      final row = w as Map<String, dynamic>;
+      final weight = (row['weight'] as num?)?.toDouble();
+      final reps = (row['reps'] as num?)?.toInt();
+      final created = DateTime.tryParse((row['created_at'] as String?) ?? '');
+      if (weight == null || weight <= 0 || reps == null || reps <= 0) {
+        continue;
+      }
+      if (created == null) continue;
+      final weeksAgo = now.difference(created).inDays ~/ 7;
+      if (weeksAgo < 0 || weeksAgo >= weeks) continue;
+      // Epley formula: est. 1RM = weight × (1 + reps/30). `weight` is
+      // logged in lbs already (unlike bodyweight, which is stored in kg).
+      final est1rm = weight * (1 + reps / 30);
+      final idx = weeks - 1 - weeksAgo; // oldest first
+      if (est1rm > best[idx]) best[idx] = est1rm;
+    }
+    return best;
+  }
 
   int? get _latestScanScore {
     final scans = ((_dash?['recent_scans'] as List?) ?? [])
@@ -266,6 +304,7 @@ class _TodayScreenState extends State<TodayScreen> {
         dayLabels: _dayLabels,
         calorieTarget: _calorieTarget,
         weeklyVolume: _weeklyVolume,
+        weeklyStrength: _weeklyStrength,
       ),
       const SizedBox(height: 12),
       Row(
@@ -295,6 +334,8 @@ class _TodayScreenState extends State<TodayScreen> {
                   : (hasScan ? 'Tuned to your physique scan' : ''),
               startLabel: _isRestDay ? 'View →' : 'Start →',
               onStart: () => mainTabIndex.value = 3,
+              workoutDone: _trainedToday,
+              onLogMeal: (_) => mainTabIndex.value = 1,
             ),
           ),
         ],
@@ -303,7 +344,7 @@ class _TodayScreenState extends State<TodayScreen> {
       SectionLabel(
         'RECENT SCANS',
         trailing: 'See all',
-        onTrailingTap: () => mainTabIndex.value = 2,
+        onTrailingTap: _showAllActivity,
       ),
       const SizedBox(height: 8),
       _recentScans(),
@@ -454,7 +495,7 @@ class _TodayScreenState extends State<TodayScreen> {
           title: (m['food_name'] as String?) ?? 'Meal',
           subtitle: '${_num(m['calories']).round()} kcal',
           tag: 'meal',
-          onTap: () => mainTabIndex.value = 1,
+          onTap: () => _showMealDetail(m),
         ),
       for (final s in scans)
         RecentScanThumb(
@@ -472,6 +513,281 @@ class _TodayScreenState extends State<TodayScreen> {
         itemCount: thumbs.length,
         separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (_, i) => thumbs[i],
+      ),
+    );
+  }
+
+  // ── Recent-activity sheets ─────────────────────────────────────────────────
+
+  String _formatTime(String? iso) {
+    final d = DateTime.tryParse(iso ?? '')?.toLocal();
+    if (d == null) return '';
+    final hour12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final minute = d.minute.toString().padLeft(2, '0');
+    final period = d.hour < 12 ? 'AM' : 'PM';
+    return '$hour12:$minute $period';
+  }
+
+  String _formatDate(String? iso) {
+    final d = DateTime.tryParse(iso ?? '')?.toLocal();
+    if (d == null) return '';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
+  }
+
+  /// Meal macro stats — no photo (none is stored), just the numbers.
+  void _showMealDetail(Map<String, dynamic> meal) {
+    final cal = _num(meal['calories']);
+    final protein = _num(meal['protein_g']);
+    final carbs = _num(meal['carbs_g']);
+    final fat = _num(meal['fat_g']);
+    final serving = meal['serving_size'] as String?;
+    final time = _formatTime(meal['created_at'] as String?);
+    final date = _formatDate(meal['created_at'] as String?);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: kBgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: kBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                (meal['food_name'] as String?) ?? 'Meal',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: kTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (date.isNotEmpty && time.isNotEmpty) '$date · $time',
+                  if (serving != null && serving.isNotEmpty) serving,
+                ].join(' · '),
+                style: TextStyle(fontSize: 12, color: kTextMuted),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text('${cal.round()}', style: kStatMedium),
+                  const SizedBox(width: 4),
+                  Text('kcal', style: kStatCaption),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  _macroTile('PROTEIN', protein, kLime),
+                  const SizedBox(width: 10),
+                  _macroTile('CARBS', carbs, kCyan),
+                  const SizedBox(width: 10),
+                  _macroTile('FAT', fat, kOrange),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _macroTile(String label, double grams, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: kBgElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${grams.round()}g',
+              style: TextStyle(
+                color: color,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: kLabelSmall.copyWith(fontSize: 9)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Full recent-activity list (all logged meals + all physique scans) in a
+  /// scrollable sheet, instead of only the 3-meal/2-scan dashboard preview.
+  void _showAllActivity() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: kBgCard,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (_, scrollController) => FutureBuilder<List<List<Map<String, dynamic>>>>(
+          // Cache-first: a reopen of this sheet is instant unless a write
+          // has invalidated the cache (new meal/scan logged elsewhere).
+          future: (TodayCache.meals != null && TodayCache.scans != null)
+              ? Future.value([TodayCache.meals!, TodayCache.scans!])
+              : Future.wait([getCalorieLogs(), getPhysiqueScans()]).then((r) {
+                  TodayCache.meals = r[0];
+                  TodayCache.scans = r[1];
+                  return r;
+                }),
+          builder: (ctx, snap) {
+            if (!snap.hasData) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: kLime),
+                ),
+              );
+            }
+            final meals = snap.data![0];
+            final scans = snap.data![1].reversed.toList(); // newest first
+            final rows =
+                <Map<String, dynamic>>[
+                  for (final m in meals) {...m, '_kind': 'meal'},
+                  for (final s in scans) {...s, '_kind': 'scan'},
+                ]..sort(
+                  (a, b) => (b['created_at'] as String? ?? '').compareTo(
+                    a['created_at'] as String? ?? '',
+                  ),
+                );
+
+            if (rows.isEmpty) {
+              return Center(
+                child: Text(
+                  'No activity logged yet',
+                  style: TextStyle(color: kTextMuted),
+                ),
+              );
+            }
+
+            return SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: kBorder,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [Text('ALL ACTIVITY', style: kLabelSmall)],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      itemCount: rows.length,
+                      separatorBuilder: (_, _) =>
+                          Divider(color: kBorder, height: 1),
+                      itemBuilder: (_, i) {
+                        final r = rows[i];
+                        final isMeal = r['_kind'] == 'meal';
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            isMeal
+                                ? Icons.restaurant_rounded
+                                : Icons.camera_alt_rounded,
+                            color: isMeal ? kLime : kPink,
+                            size: 20,
+                          ),
+                          title: Text(
+                            isMeal
+                                ? ((r['food_name'] as String?) ?? 'Meal')
+                                : 'Physique scan',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: kTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            isMeal
+                                ? '${_num(r['calories']).round()} kcal · '
+                                      '${_formatDate(r['created_at'] as String?)}'
+                                : '${(r['overall_score'] as num?)?.toInt() ?? '—'}/100 · '
+                                      '${_formatDate(r['created_at'] as String?)}',
+                            style: TextStyle(fontSize: 12, color: kTextMuted),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: kTextMuted,
+                          ),
+                          onTap: () {
+                            Navigator.of(sheetCtx).pop();
+                            if (isMeal) {
+                              _showMealDetail(r);
+                            } else {
+                              mainTabIndex.value = 2;
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

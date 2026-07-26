@@ -815,6 +815,10 @@ async def get_dashboard(
         {
             "food_name": c.get("food_name") or "Meal",
             "calories": float(c.get("calories") or 0),
+            "protein_g": float(c.get("protein_g") or 0),
+            "carbs_g": float(c.get("carbs_g") or 0),
+            "fat_g": float(c.get("fat_g") or 0),
+            "serving_size": c.get("serving_size"),
             "created_at": c.get("created_at"),
         }
         for c in sorted(
