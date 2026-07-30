@@ -63,27 +63,33 @@ class PhysiqueMiniCard extends StatelessWidget {
               style: TextStyle(fontSize: 13, color: kTextMuted),
             ),
           ] else ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${bodyFat!.toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: kPink,
-                    height: 1.0,
+            // This card is half the screen wide, so the number + caption pair
+            // is scaled down rather than allowed to run off the edge.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${bodyFat!.toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: kPink,
+                      height: 1.0,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Padding(
-                  padding: EdgeInsets.only(bottom: 1),
-                  child: Text(
-                    'body fat',
-                    style: TextStyle(fontSize: 12, color: kTextMuted),
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 1),
+                    child: Text(
+                      'body fat',
+                      style: TextStyle(fontSize: 12, color: kTextMuted),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             if (score != null) ...[
               const SizedBox(height: 3),
@@ -91,12 +97,16 @@ class PhysiqueMiniCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.star_rounded, size: 14, color: kLime),
                   const SizedBox(width: 3),
-                  Text(
-                    'Score $score/100',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: kLime,
+                  Flexible(
+                    child: Text(
+                      'Score $score/100',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: kLime,
+                      ),
                     ),
                   ),
                 ],

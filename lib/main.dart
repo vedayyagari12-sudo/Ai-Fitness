@@ -20,6 +20,9 @@ void main() async {
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmb3Bpenl3dGdhcWhrYmtqbHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDU0NTYsImV4cCI6MjA5MDcyMTQ1Nn0.Y2CbDOSoVA3AP8E6JZJ0Vi6p1LE8U4WO87PXAkRQIOk',
   );
+  // Onboarding state used to be stored device-wide; drop those keys so a new
+  // account on this device is gated on its own (per-user) flag.
+  await AppStateService.clearLegacyOnboardingState();
   runApp(const MyApp());
 }
 
@@ -64,7 +67,9 @@ class AppBootstrap extends StatelessWidget {
         }
         final session = snapshot.data?.session;
         if (session == null) return const LoginScreen();
-        return const _OnboardingGate();
+        // Keyed by user id so switching accounts tears down the old gate state
+        // instead of reusing the previous user's "already onboarded" answer.
+        return _OnboardingGate(key: ValueKey(session.user.id));
       },
     );
   }
@@ -72,7 +77,7 @@ class AppBootstrap extends StatelessWidget {
 
 // After auth, check whether onboarding is needed.
 class _OnboardingGate extends StatefulWidget {
-  const _OnboardingGate();
+  const _OnboardingGate({super.key});
 
   @override
   State<_OnboardingGate> createState() => _OnboardingGateState();
@@ -88,21 +93,23 @@ class _OnboardingGateState extends State<_OnboardingGate> {
   }
 
   Future<void> _check() async {
-    // Fast path: local flag set on this device
+    // Fast path: local flag, set per account on this device
     if (await AppStateService.isOnboardingComplete()) {
       if (mounted) setState(() => _onboardingDone = true);
       return;
     }
-    // Reinstall / new device: check if profile exists in Supabase
+    // Reinstall / new device: check if this account already answered onboarding.
+    // A bare row isn't enough — other screens can create one — so require a
+    // field only onboarding fills in.
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid != null) {
       try {
         final row = await Supabase.instance.client
             .from('user_profiles')
-            .select('id')
+            .select('id, goal, age')
             .eq('id', uid)
             .maybeSingle();
-        if (row != null) {
+        if (row != null && row['goal'] != null && row['age'] != null) {
           await AppStateService.markOnboardingComplete();
           if (mounted) setState(() => _onboardingDone = true);
           return;

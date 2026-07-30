@@ -602,11 +602,21 @@ async def log_bodyweight(
         existing = check.json() if check.status_code == 200 else []
         if existing:
             row_id = existing[0]["id"]
+            # `return=representation` so we can tell a real update from a
+            # silent RLS no-op — Postgrest returns 200 with an EMPTY array
+            # when a policy filters the row out, which looks identical to
+            # success unless the body is actually inspected. That silent
+            # failure was exactly why a same-day correction wouldn't stick.
             resp = await client.patch(
                 f"{SUPABASE_URL}/rest/v1/bodyweight_logs?id=eq.{row_id}",
-                headers={**uhdr, "Prefer": "return=minimal"},
+                headers={**uhdr, "Prefer": "return=representation"},
                 json={"weight_kg": log.weight_kg},
             )
+            if resp.status_code in (200, 201) and not resp.json():
+                raise HTTPException(
+                    status_code=500,
+                    detail="Update was rejected (no row changed) — check bodyweight_logs UPDATE policy",
+                )
         else:
             resp = await client.post(
                 f"{SUPABASE_URL}/rest/v1/bodyweight_logs",

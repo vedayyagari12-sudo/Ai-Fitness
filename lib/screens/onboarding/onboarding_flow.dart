@@ -312,77 +312,93 @@ class _WelcomeStepState extends State<_WelcomeStep>
               ),
             ),
 
+            // Scrolls only when it has to: on a normal phone the Spacers
+            // centre the content as before, on a short screen (or at a large
+            // system text size) it becomes scrollable instead of overflowing.
             SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    // Premium badge icon with ambient glow
-                    Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.accent.withValues(alpha: 0.25),
-                            AppColors.accent.withValues(alpha: 0.08),
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            const Spacer(),
+                            // Premium badge icon with ambient glow
+                            Container(
+                              width: 96,
+                              height: 96,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppColors.accent.withValues(alpha: 0.25),
+                                    AppColors.accent.withValues(alpha: 0.08),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.accent.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    blurRadius: 40,
+                                    spreadRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.fitness_center,
+                                size: 44,
+                                color: AppColors.accent,
+                              ),
+                            ),
+                            const SizedBox(height: 36),
+                            Text(
+                              'Train smarter\nwith AI',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 38,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                height: 1.15,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              'Personalized workouts, calorie scanning, and physique analysis — all in one sleek app.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: AppColors.textSecondary,
+                                height: 1.5,
+                              ),
+                            ),
+                            const Spacer(),
+                            ContinueButton(
+                              onPressed: widget.onContinue,
+                              label: 'Get Started',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Takes about 2 minutes',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textMuted,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.accent.withValues(alpha: 0.2),
-                            blurRadius: 40,
-                            spreadRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.fitness_center,
-                        size: 44,
-                        color: AppColors.accent,
                       ),
                     ),
-                    const SizedBox(height: 36),
-                    Text(
-                      'Train smarter\nwith AI',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 38,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        height: 1.15,
-                        letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Personalized workouts, calorie scanning, and physique analysis — all in one sleek app.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
-                    ),
-                    const Spacer(),
-                    ContinueButton(
-                      onPressed: widget.onContinue,
-                      label: 'Get Started',
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Takes about 2 minutes',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

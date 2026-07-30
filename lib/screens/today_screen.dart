@@ -307,38 +307,42 @@ class _TodayScreenState extends State<TodayScreen> {
         weeklyStrength: _weeklyStrength,
       ),
       const SizedBox(height: 12),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: PhysiqueMiniCard(
-              bodyFat: bf > 0 ? bf : null,
-              score: _latestScanScore,
-              scanCount: _scanCount,
-              delta: bfChange != 0
-                  ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}% vs last scan'
-                  : null,
-              deltaPositive: bfChange <= 0,
-              points: _bfPoints,
+      // IntrinsicHeight + stretch: the two cards hold different amounts of
+      // text, and left ragged they end at different heights.
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: PhysiqueMiniCard(
+                bodyFat: bf > 0 ? bf : null,
+                score: _latestScanScore,
+                scanCount: _scanCount,
+                delta: bfChange != 0
+                    ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}% vs last scan'
+                    : null,
+                deltaPositive: bfChange <= 0,
+                points: _bfPoints,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TodaySessionCard(
-              title: _sessionName(),
-              meta: _isRestDay
-                  ? 'Recovery — nothing scheduled'
-                  : '~45 min · AI generated',
-              note: _isRestDay
-                  ? ''
-                  : (hasScan ? 'Tuned to your physique scan' : ''),
-              startLabel: _isRestDay ? 'View →' : 'Start →',
-              onStart: () => mainTabIndex.value = 3,
-              workoutDone: _trainedToday,
-              onLogMeal: (_) => mainTabIndex.value = 1,
+            const SizedBox(width: 12),
+            Expanded(
+              child: TodaySessionCard(
+                title: _sessionName(),
+                meta: _isRestDay
+                    ? 'Recovery — nothing scheduled'
+                    : '~45 min · AI generated',
+                note: _isRestDay
+                    ? ''
+                    : (hasScan ? 'Tuned to your physique scan' : ''),
+                startLabel: _isRestDay ? 'View →' : 'Start →',
+                onStart: () => mainTabIndex.value = 3,
+                workoutDone: _trainedToday,
+                onLogMeal: (_) => mainTabIndex.value = 1,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       const SizedBox(height: 16),
       SectionLabel(

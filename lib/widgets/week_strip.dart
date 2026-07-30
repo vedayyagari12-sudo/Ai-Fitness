@@ -33,36 +33,58 @@ class WeekStrip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('YOUR WEEK', style: kLabelSmall),
-              Text(
-                streak > 0
-                    ? '🔥 $streak day streak'
-                    : '$activeCount/7 days active',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: streak > 0 ? kOrange : kTextMuted,
+              Flexible(
+                child: Text(
+                  streak > 0
+                      ? '🔥 $streak day streak'
+                      : '$activeCount/7 days active',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: streak > 0 ? kOrange : kTextMuted,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (var i = 0; i < 7; i++)
-                _day(
-                  today.subtract(Duration(days: 6 - i)),
-                  active: i < activity.length && activity[i],
-                  isToday: i == 6,
-                ),
-            ],
+          // Seven fixed 38px circles need 266px of card — more than a 320dp
+          // phone has once padding is taken out, so the diameter is derived
+          // from the width actually available.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const gap = 4.0;
+              final diameter = ((constraints.maxWidth - gap * 6) / 7).clamp(
+                26.0,
+                38.0,
+              );
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (var i = 0; i < 7; i++)
+                    _day(
+                      today.subtract(Duration(days: 6 - i)),
+                      active: i < activity.length && activity[i],
+                      isToday: i == 6,
+                      diameter: diameter,
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _day(DateTime date, {required bool active, required bool isToday}) {
+  Widget _day(
+    DateTime date, {
+    required bool active,
+    required bool isToday,
+    required double diameter,
+  }) {
     return Column(
       children: [
         Text(
@@ -75,8 +97,8 @@ class WeekStrip extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Container(
-          width: 38,
-          height: 38,
+          width: diameter,
+          height: diameter,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: active ? kLime : kBgHighlight,
@@ -86,11 +108,15 @@ class WeekStrip extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: active
-              ? const Icon(Icons.check_rounded, size: 20, color: Colors.black)
+              ? Icon(
+                  Icons.check_rounded,
+                  size: diameter * 0.53,
+                  color: Colors.black,
+                )
               : Text(
                   '${date.day}',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: diameter * 0.42,
                     fontWeight: FontWeight.w700,
                     color: isToday ? kTextPrimary : kTextMuted,
                   ),

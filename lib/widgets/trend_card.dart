@@ -147,7 +147,9 @@ class _TrendCardState extends State<TrendCard> {
 
   Widget _empty(String hint) {
     return SizedBox(
-      height: 170,
+      // Roughly the height of a populated view, so switching tabs doesn't
+      // make the card jump.
+      height: 215,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -175,10 +177,21 @@ class _TrendCardState extends State<TrendCard> {
     return '$n';
   }
 
+  /// Plot height. The charts carry always-on value labels, so they need real
+  /// vertical room — at the old 120 the bars were squeezed into the lower
+  /// two-thirds and read as a cramped strip.
+  static const double _chartHeight = 168;
+
+  /// Headroom above the tallest bar, as a multiple of it, so the always-on
+  /// value label has somewhere to sit without being clipped. Kept tight —
+  /// every bit of extra headroom is height stolen from the bars themselves.
+  static const double _labelHeadroom = 1.22;
+
   /// Value labels drawn permanently above each bar/point. Rendered as a
   /// tooltip with a transparent background so it reads as a plain number.
+  /// Sized to fit a 7-bar week without neighbouring labels colliding.
   static TextStyle get _valueLabelStyle =>
-      TextStyle(color: kTextPrimary, fontSize: 17, fontWeight: FontWeight.w800);
+      TextStyle(color: kTextPrimary, fontSize: 13, fontWeight: FontWeight.w800);
 
   // ── CALORIES ────────────────────────────────────────────────────────────
 
@@ -217,11 +230,17 @@ class _TrendCardState extends State<TrendCard> {
               ),
             ),
             const SizedBox(width: 4),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                '/ ${_formatThousands(target.round())} kcal today',
-                style: kStatCaption,
+            // Flexible: at a 4-digit intake and a 4-digit target this pair
+            // runs past a narrow phone otherwise.
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  '/ ${_formatThousands(target.round())} kcal today',
+                  style: kStatCaption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ],
@@ -234,7 +253,7 @@ class _TrendCardState extends State<TrendCard> {
           style: TextStyle(fontSize: 13, color: kTextMuted),
         ),
         const SizedBox(height: 14),
-        SizedBox(height: 120, child: BarChart(_calorieBars())),
+        SizedBox(height: _chartHeight, child: BarChart(_calorieBars())),
         const SizedBox(height: 8),
         // Scale the legend down instead of overflowing on narrow phones.
         FittedBox(
@@ -272,7 +291,7 @@ class _TrendCardState extends State<TrendCard> {
 
     return BarChartData(
       // Headroom so the always-on value labels aren't clipped.
-      maxY: maxVal * 1.5,
+      maxY: maxVal * _labelHeadroom,
       minY: 0,
       gridData: const FlGridData(show: false),
       borderData: FlBorderData(show: false),
@@ -419,7 +438,10 @@ class _TrendCardState extends State<TrendCard> {
           ),
         ),
         const SizedBox(height: 14),
-        SizedBox(height: 120, child: LineChart(_weightLine(trendColor))),
+        SizedBox(
+          height: _chartHeight,
+          child: LineChart(_weightLine(trendColor)),
+        ),
       ],
     );
   }
@@ -550,19 +572,23 @@ class _TrendCardState extends State<TrendCard> {
             ),
             if (pctChange != null) ...[
               const SizedBox(width: 8),
-              Text(
-                '${pctChange >= 0 ? '▲ +' : '▼ '}$pctChange% vs last week',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: pctChange >= 0 ? kGreen : kPink,
+              Flexible(
+                child: Text(
+                  '${pctChange >= 0 ? '▲ +' : '▼ '}$pctChange% vs last week',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: pctChange >= 0 ? kGreen : kPink,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ],
         ),
         const SizedBox(height: 14),
-        SizedBox(height: 120, child: BarChart(_volumeBars())),
+        SizedBox(height: _chartHeight, child: BarChart(_volumeBars())),
       ],
     );
   }
@@ -573,7 +599,7 @@ class _TrendCardState extends State<TrendCard> {
 
     return BarChartData(
       // Headroom for the always-on value labels.
-      maxY: maxVal * 1.55 + 1,
+      maxY: maxVal * _labelHeadroom + 1,
       minY: 0,
       gridData: const FlGridData(show: false),
       borderData: FlBorderData(show: false),
@@ -671,20 +697,20 @@ class _TrendCardState extends State<TrendCard> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Estimated 1-Rep Max (lbs)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: kTextPrimary,
+              Flexible(
+                child: Text(
+                  'Estimated 1-Rep Max (lbs)',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kTextPrimary,
+                  ),
                 ),
               ),
               const SizedBox(width: 5),
-              Icon(
-                Icons.info_outline_rounded,
-                size: 14,
-                color: kTextMuted,
-              ),
+              Icon(Icons.info_outline_rounded, size: 14, color: kTextMuted),
             ],
           ),
         ),
@@ -706,19 +732,23 @@ class _TrendCardState extends State<TrendCard> {
             ),
             if (pctChange != null) ...[
               const SizedBox(width: 8),
-              Text(
-                '${pctChange >= 0 ? '▲ +' : '▼ '}$pctChange% vs last logged',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: pctChange >= 0 ? kGreen : kPink,
+              Flexible(
+                child: Text(
+                  '${pctChange >= 0 ? '▲ +' : '▼ '}$pctChange% vs last logged',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: pctChange >= 0 ? kGreen : kPink,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ],
         ),
         const SizedBox(height: 14),
-        SizedBox(height: 120, child: BarChart(_strengthBars())),
+        SizedBox(height: _chartHeight, child: BarChart(_strengthBars())),
       ],
     );
   }
@@ -728,7 +758,7 @@ class _TrendCardState extends State<TrendCard> {
     final maxVal = str.reduce((a, b) => a > b ? a : b);
 
     return BarChartData(
-      maxY: maxVal * 1.55 + 1,
+      maxY: maxVal * _labelHeadroom + 1,
       minY: 0,
       gridData: const FlGridData(show: false),
       borderData: FlBorderData(show: false),
@@ -852,10 +882,7 @@ class _TrendCardState extends State<TrendCard> {
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              'EXAMPLE',
-              style: kLabelSmall.copyWith(fontSize: 10),
-            ),
+            Text('EXAMPLE', style: kLabelSmall.copyWith(fontSize: 10)),
             const SizedBox(height: 6),
             Text(
               'You log 185 lbs for 8 reps.\n'

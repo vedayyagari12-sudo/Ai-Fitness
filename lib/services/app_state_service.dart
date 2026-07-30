@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/onboarding_data.dart';
 
 class AppStateService {
@@ -11,26 +12,44 @@ class AppStateService {
   static bool get isGuestMode => _guestMode;
   static void setGuestMode(bool value) => _guestMode = value;
 
+  // Every piece of onboarding state is per-account: two people (or one person
+  // with two accounts) sharing a device must each get their own onboarding.
+  static String? get _uid => Supabase.instance.client.auth.currentUser?.id;
+
+  static String _key(String base) {
+    final uid = _uid;
+    return uid == null ? base : '${base}_$uid';
+  }
+
   static Future<bool> isOnboardingComplete() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_onboardingCompleteKey) ?? false;
+    return prefs.getBool(_key(_onboardingCompleteKey)) ?? false;
   }
 
   static Future<void> completeOnboarding(OnboardingData data) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingCompleteKey, true);
-    await prefs.setString(_onboardingDataKey, jsonEncode(data.toJson()));
+    await prefs.setBool(_key(_onboardingCompleteKey), true);
+    await prefs.setString(_key(_onboardingDataKey), jsonEncode(data.toJson()));
   }
 
   // Sets the completion flag only — used when profile found in Supabase on reinstall.
   static Future<void> markOnboardingComplete() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingCompleteKey, true);
+    await prefs.setBool(_key(_onboardingCompleteKey), true);
+  }
+
+  /// Wipes this device's legacy (unscoped) onboarding keys. Those were written
+  /// before the state was namespaced per account and would otherwise let a
+  /// brand-new signup inherit the previous user's "already onboarded" flag.
+  static Future<void> clearLegacyOnboardingState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_onboardingCompleteKey);
+    await prefs.remove(_onboardingDataKey);
   }
 
   static Future<OnboardingData?> getOnboardingData() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_onboardingDataKey);
+    final raw = prefs.getString(_key(_onboardingDataKey));
     if (raw == null) return null;
     final map = jsonDecode(raw) as Map<String, dynamic>;
     return OnboardingData()
@@ -50,7 +69,7 @@ class AppStateService {
 
   static Future<Set<int>> getSeenMilestones() async {
     final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(_seenMilestonesKey) ?? [];
+    final list = prefs.getStringList(_key(_seenMilestonesKey)) ?? [];
     return list.map(int.parse).toSet();
   }
 
@@ -59,7 +78,7 @@ class AppStateService {
     final seen = await getSeenMilestones();
     seen.add(milestone);
     await prefs.setStringList(
-      _seenMilestonesKey,
+      _key(_seenMilestonesKey),
       seen.map((e) => e.toString()).toList(),
     );
   }

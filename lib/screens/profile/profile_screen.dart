@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -45,6 +47,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _save(String key, dynamic value) async {
     setState(() => _profile[key] = value);
     await upsertUserProfile({key: value});
+    // Weight edited here also feeds the BODY tab's daily log/trend chart —
+    // otherwise a manual profile edit and the logged-weight history quietly
+    // disagree with each other.
+    if (key == 'weight_kg' && value is num) {
+      unawaited(logBodyweight(value.toDouble()));
+    }
     if (mounted) AppSnackbar.success(context, 'Saved');
   }
 

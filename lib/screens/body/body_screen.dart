@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -500,10 +502,15 @@ class _BodyScreenState extends State<BodyScreen> {
       AppSnackbar.error(context, 'Enter a valid weight');
       return;
     }
-    final resp = await logBodyweight(lbsToKg(lbs));
+    final kg = lbsToKg(lbs);
+    final resp = await logBodyweight(kg);
     if (!mounted) return;
     if (resp != null && resp['error'] == null) {
       AppSnackbar.success(context, 'Weight logged');
+      // Keep the profile's weight (used for TDEE / calorie & protein
+      // targets) in sync with the latest logged bodyweight — otherwise it
+      // silently goes stale the moment someone stops hand-editing Profile.
+      unawaited(upsertUserProfile({'weight_kg': kg}));
       triggerTodayRefresh();
       _load();
     } else {
@@ -1060,7 +1067,9 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        SizedBox(height: 130, child: chart),
+        // Matches the dashboard trend charts — these carry always-on value
+        // labels, which at 130 left the plot itself looking squeezed.
+        SizedBox(height: 165, child: chart),
       ],
     );
   }
@@ -1713,4 +1722,3 @@ class _MuscleMapPainter extends CustomPainter {
   bool shouldRepaint(_MuscleMapPainter old) =>
       old.scores != scores || old._brightness != _brightness;
 }
-
