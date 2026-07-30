@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 /// Cache for the TODAY dashboard's "recent activity" panel — the meal/scan
 /// list backing the meal-detail sheet and the "see all" sheet, plus an
 /// optimistic "trained today" flag.
@@ -15,6 +17,7 @@ class TodayCache {
   TodayCache._();
 
   static String? _dayKey;
+  static String? _userKey;
   static bool trainedToday = false;
   static List<Map<String, dynamic>>? meals;
   static List<Map<String, dynamic>>? scans;
@@ -24,14 +27,38 @@ class TodayCache {
     return '${n.year}-${n.month}-${n.day}';
   }
 
-  /// Drop yesterday's "trained" flag so each day starts fresh. The
-  /// meal/scan cache is unaffected — it's invalidated on writes, not by
-  /// the calendar, since "recent activity" spans more than just today.
+  static String get _uid {
+    // Tolerates Supabase not being initialised (tests, very early startup) —
+    // this is cache scoping, never a reason to crash a screen.
+    try {
+      return Supabase.instance.client.auth.currentUser?.id ?? 'anon';
+    } catch (_) {
+      return 'anon';
+    }
+  }
+
+  /// Drop yesterday's "trained" flag so each day starts fresh, and drop
+  /// *everything* when the signed-in account changes — this is process-wide
+  /// state, so without the account check a new signup on the same device
+  /// inherits the previous user's "workout logged" flag and activity list.
   static void ensureToday() {
+    if (_userKey != _uid) {
+      _userKey = _uid;
+      _dayKey = _today;
+      reset();
+      return;
+    }
     if (_dayKey != _today) {
       _dayKey = _today;
       trainedToday = false;
     }
+  }
+
+  /// Wipes every cached value. Called on an account change and on sign-out.
+  static void reset() {
+    trainedToday = false;
+    meals = null;
+    scans = null;
   }
 
   static void markTrainedToday() {

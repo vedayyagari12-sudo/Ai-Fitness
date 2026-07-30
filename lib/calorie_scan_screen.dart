@@ -13,6 +13,7 @@ import 'services/nav_service.dart' show triggerTodayRefresh;
 import 'services/permission_service.dart';
 import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_widgets.dart';
 import 'widgets/deco.dart';
 import 'utils/snackbar.dart';
 
@@ -255,7 +256,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
           ? null
           : AppBar(title: const Text('Calorie Scanner')),
       body: SingleChildScrollView(
-        padding: EdgeInsets.zero,
+        padding: EdgeInsets.only(bottom: navBarClearance(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

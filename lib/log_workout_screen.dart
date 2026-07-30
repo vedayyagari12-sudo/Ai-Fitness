@@ -94,7 +94,7 @@ class _LogWorkoutScreenState extends State<LogWorkoutScreen> {
     return Scaffold(
       appBar: widget.embedded ? null : AppBar(title: const Text('Log Workout')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + navBarClearance(context)),
         child: AppCard(
           margin: EdgeInsets.zero,
           child: Column(

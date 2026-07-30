@@ -132,6 +132,78 @@ void main() {
     );
   });
 
+  // A brand-new account has no data at all — every card renders its empty
+  // state, which is what a user actually sees right after onboarding.
+  final emptyCards = <String, Widget Function()>{
+    'TrendCard': () => const TrendCard(
+      goal: 'maintain',
+      weightLbs: [],
+      dailyCalories: [0, 0, 0, 0, 0, 0, 0],
+      dayLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      calorieTarget: 2200,
+      weeklyVolume: [0],
+      weeklyStrength: [],
+    ),
+    'WeekStrip': () => const WeekStrip(
+      activity: [false, false, false, false, false, false, false],
+    ),
+    'ReadinessCard': () => const ReadinessCard(
+      data: ReadinessData(
+        score: 0,
+        caloriesProgress: 0,
+        proteinProgress: 0,
+        sessionsProgress: 0,
+        fueledValue: '0%',
+        caloriesLabel: '0 kcal',
+        loadValue: '0',
+        loadLabel: 'push day',
+        proteinValue: '0g',
+        proteinTarget: 'set a goal',
+        bodyFatValue: '—',
+        bodyFatDelta: '',
+        trainingDetail: 'No workout yet today',
+        fuelDetail: '0 of 2,200 kcal today',
+        proteinDetail: '0g today',
+      ),
+    ),
+    'PhysiqueMiniCard': () => const PhysiqueMiniCard(),
+    'TodaySessionCard': () => const TodaySessionCard(
+      title: 'Push Session',
+      meta: '~45 min · AI generated',
+      note: '',
+    ),
+  };
+
+  emptyCards.forEach((name, build) {
+    testWidgets('$name empty state does not overflow at 320dp', (tester) async {
+      await expectNoOverflow(tester, build());
+    });
+
+    testWidgets('$name empty state does not overflow with large text', (
+      tester,
+    ) async {
+      await expectNoOverflow(tester, build(), textScale: 1.3);
+    });
+  });
+
+  // The half-width pair as a brand-new account sees it: the physique card has
+  // no scan yet, so the two cards' natural heights are very different.
+  testWidgets('empty half-width card row does not overflow', (tester) async {
+    await expectNoOverflow(
+      tester,
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: emptyCards['PhysiqueMiniCard']!()),
+            const SizedBox(width: 12),
+            Expanded(child: emptyCards['TodaySessionCard']!()),
+          ],
+        ),
+      ),
+    );
+  });
+
   // Each trend tab renders a different chart+header combination.
   testWidgets('every TrendCard tab does not overflow at 320dp', (tester) async {
     tester.view.physicalSize = narrow;

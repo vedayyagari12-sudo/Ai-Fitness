@@ -12,6 +12,7 @@ import 'services/nav_service.dart' show mainTabIndex, triggerTodayRefresh;
 import 'services/permission_service.dart';
 import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_widgets.dart';
 import 'utils/snackbar.dart';
 
 class PhysiqueScanScreen extends StatefulWidget {
@@ -236,7 +237,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
           ? null
           : AppBar(title: const Text('Physique Scanner')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + navBarClearance(context)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

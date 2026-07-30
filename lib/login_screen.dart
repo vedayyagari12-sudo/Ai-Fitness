@@ -253,9 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     Center(
                       child: Text(
-                        isSignUp
-                            ? 'Create your account'
-                            : 'Log in to continue',
+                        isSignUp ? 'Create your account' : 'Log in to continue',
                         style: TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,

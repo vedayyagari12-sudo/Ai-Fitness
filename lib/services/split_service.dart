@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../api_service.dart';
 
@@ -13,7 +14,18 @@ enum TrainingSplit { auto, ppl, upperLower, fullBody }
 class SplitService {
   SplitService._();
 
-  static const _key = 'training_split';
+  static const _keyBase = 'training_split';
+
+  /// Per-account key: the split is a property of the user, not the device, so
+  /// a second account on the same phone must not inherit the first one's.
+  static String get _key {
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      return uid == null ? _keyBase : '${_keyBase}_$uid';
+    } catch (_) {
+      return _keyBase;
+    }
+  }
 
   /// Local-first read: instant on repeat visits. On a device/browser with no
   /// local value yet (fresh install, or — on web — a dev server that landed

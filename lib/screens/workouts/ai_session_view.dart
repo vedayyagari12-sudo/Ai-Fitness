@@ -51,6 +51,7 @@ class _GeneratedExercise {
 /// workout or burn another AI generation. Cleared automatically on a new day.
 class _SessionCache {
   static String? _dayKey;
+  static String? _userKey;
   static Map<String, dynamic>? workout;
   static List<_GeneratedExercise> exercises = [];
   static Set<String> lagging = {};
@@ -65,19 +66,40 @@ class _SessionCache {
     return '${n.year}-${n.month}-${n.day}';
   }
 
-  /// Drop yesterday's session so each day starts fresh.
+  static String get _uid {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id ?? 'anon';
+    } catch (_) {
+      return 'anon';
+    }
+  }
+
+  /// Drop yesterday's session so each day starts fresh, and drop it on an
+  /// account change too — this state is process-wide, so otherwise a brand
+  /// new account opens TRAIN to the previous user's finished session
+  /// ("workout logged, 3 exercises").
   static void ensureToday() {
+    if (_userKey != _uid) {
+      _userKey = _uid;
+      _dayKey = _today;
+      reset();
+      return;
+    }
     if (_dayKey != _today) {
       _dayKey = _today;
-      workout = null;
-      exercises = [];
-      lagging = {};
-      started = false;
-      completed = false;
-      completedCount = 0;
-      restOverride = false;
-      focus = '';
+      reset();
     }
+  }
+
+  static void reset() {
+    workout = null;
+    exercises = [];
+    lagging = {};
+    started = false;
+    completed = false;
+    completedCount = 0;
+    restOverride = false;
+    focus = '';
   }
 
   /// True when there's something worth restoring instead of regenerating.
@@ -425,7 +447,7 @@ class _AiSessionViewState extends State<AiSessionView> {
   Widget _restDayView() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 60, 20, 32 + navBarClearance(context)),
       children: [
         Container(
           padding: const EdgeInsets.all(24),
@@ -451,7 +473,10 @@ class _AiSessionViewState extends State<AiSessionView> {
               ),
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: kCyan.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -530,7 +555,7 @@ class _AiSessionViewState extends State<AiSessionView> {
     final n = _completedCountLogged;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 60, 20, 32 + navBarClearance(context)),
       children: [
         Container(
           padding: const EdgeInsets.all(24),
@@ -635,7 +660,7 @@ class _AiSessionViewState extends State<AiSessionView> {
   Widget _errorState() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, 80, 20, 20 + navBarClearance(context)),
       children: [
         Icon(Icons.bolt_rounded, size: 44, color: AppColors.textMuted),
         const SizedBox(height: 12),
@@ -651,7 +676,7 @@ class _AiSessionViewState extends State<AiSessionView> {
   Widget _loadingState() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + navBarClearance(context)),
       children: [
         const SizedBox(height: 8),
         ShimmerBox(width: 180, height: 14, borderRadius: 6),
@@ -731,7 +756,7 @@ class _AiSessionViewState extends State<AiSessionView> {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + navBarClearance(context)),
       children: [
         for (var i = 0; i < children.length; i++)
           children[i]

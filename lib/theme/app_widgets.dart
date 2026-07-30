@@ -2,6 +2,20 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
+/// Bottom padding a scroll view needs so its last item clears the nav bar.
+///
+/// MainScreen sets `extendBody: true`, so tab content is laid out *behind* the
+/// bottom nav rather than above it, and the SCAN/BODY/TRAIN tabs deliberately
+/// use `SafeArea(bottom: false)` to let their background paint through. That
+/// leaves roughly 110dp of nav bar sitting on top of the last thing in every
+/// list unless the list pads for it.
+///
+/// Self-correcting: where an ancestor SafeArea has already consumed the inset
+/// (a pushed full-screen route, for example) this is 0, so it can be added
+/// unconditionally.
+double navBarClearance(BuildContext context) =>
+    MediaQuery.paddingOf(context).bottom;
+
 // ── Shimmer loading box ───────────────────────────────────────────────────────
 class ShimmerBox extends StatefulWidget {
   const ShimmerBox({

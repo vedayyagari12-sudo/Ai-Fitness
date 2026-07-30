@@ -8,6 +8,7 @@ import 'screens/body/body_screen.dart';
 import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
 import 'services/nav_service.dart';
+import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'screens/workouts/workouts_tab_screen.dart';
@@ -66,7 +67,12 @@ class AppBootstrap extends StatelessWidget {
           );
         }
         final session = snapshot.data?.session;
-        if (session == null) return const LoginScreen();
+        if (session == null) {
+          // Drop the previous user's in-memory state the moment they sign
+          // out, rather than waiting for the next screen to notice.
+          TodayCache.reset();
+          return const LoginScreen();
+        }
         // Keyed by user id so switching accounts tears down the old gate state
         // instead of reusing the previous user's "already onboarded" answer.
         return _OnboardingGate(key: ValueKey(session.user.id));

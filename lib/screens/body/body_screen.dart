@@ -198,7 +198,7 @@ class _BodyScreenState extends State<BodyScreen> {
   Widget _skeleton() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + navBarClearance(context)),
       children: [
         const ShimmerBox(width: 160, height: 14, borderRadius: 6),
         const SizedBox(height: 12),
@@ -338,7 +338,7 @@ class _BodyScreenState extends State<BodyScreen> {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + navBarClearance(context)),
       children: [
         for (var i = 0; i < sections.length; i++)
           sections[i]
