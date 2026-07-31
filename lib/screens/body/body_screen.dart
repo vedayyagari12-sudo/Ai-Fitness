@@ -714,18 +714,23 @@ class _BodyScreenState extends State<BodyScreen> {
           // width rather than a fixed 132px — at larger type that clipped
           // "Shoulders" to "Sho…".
           Expanded(
-            flex: 6,
+            flex: 7,
             child: Row(
               children: [
+                // Scaled, not ellipsised: "Shoulders" is the label's whole
+                // meaning, and "Should…" tells the user nothing.
                 Flexible(
-                  child: Text(
-                    m.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      m.name,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -759,7 +764,7 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: (m.score / 10).clamp(0.0, 1.0)),
               duration: const Duration(milliseconds: 700),

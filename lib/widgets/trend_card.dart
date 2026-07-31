@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/app_widgets.dart';
 import '../utils/units.dart';
 
 /// Dashboard trends card — four tabs, each with a headline number, a chart
@@ -397,10 +398,46 @@ class _TrendCardState extends State<TrendCard> {
 
   Widget _weightView() {
     final w = widget.weightLbs;
-    if (w.length < 2) {
+    if (w.isEmpty) {
       return _empty(
         'Log your bodyweight on the BODY tab (tap the WEIGHT card) '
-        'to start your trend — two entries and the line appears',
+        'to start your trend',
+      );
+    }
+    // One weigh-in is a real answer, not a failure: show it rather than
+    // repeating the same "log it twice" nag every time they open the tab.
+    if (w.length < 2) {
+      return SizedBox(
+        height: 215,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '${lbsLabel(w.first)} lbs',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    color: kTextPrimary,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'First weigh-in recorded. Log again on another day and '
+                  'your trend line appears here.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: kTextMuted),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -838,13 +875,9 @@ class _TrendCardState extends State<TrendCard> {
   }
 
   void _showStrengthInfoSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
+    showAppSheet<void>(
+      context,
+      child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,

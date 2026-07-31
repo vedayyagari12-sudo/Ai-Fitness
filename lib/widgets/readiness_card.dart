@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/readiness_data.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_widgets.dart';
 
 /// Hero card on TODAY: three concentric progress rings around the readiness
 /// score, corner stats, a color legend, and an info sheet explaining exactly
@@ -170,13 +171,9 @@ class ReadinessCard extends StatelessWidget {
   }
 
   void _showInfoSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
+    showAppSheet<void>(
+      context,
+      child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,

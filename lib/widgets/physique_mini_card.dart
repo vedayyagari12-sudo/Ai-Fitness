@@ -16,6 +16,7 @@ class PhysiqueMiniCard extends StatelessWidget {
     this.points = const [],
     this.focus = const [],
     this.strong = const [],
+    this.muscles = const [],
   });
 
   /// Latest body fat %, null when the user has no scans yet.
@@ -31,6 +32,9 @@ class PhysiqueMiniCard extends StatelessWidget {
 
   /// Muscle groups it rated strong (>= 7/10), best first.
   final List<String> strong;
+
+  /// Per-muscle scores out of 10, weakest first.
+  final List<(String, double)> muscles;
 
   @override
   Widget build(BuildContext context) {
@@ -169,9 +173,70 @@ class PhysiqueMiniCard extends StatelessWidget {
               if (strong.isNotEmpty)
                 _insight(Icons.check_circle_rounded, 'Strong', strong, kGreen),
             ],
+            // Per-muscle detail, weakest first. The card is stretched to match
+            // its neighbour, so this is what turns the leftover space into
+            // something worth reading.
+            if (muscles.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Divider(height: 1, color: kBorder),
+              const SizedBox(height: 8),
+              for (final (name, score) in muscles.take(4)) ...[
+                _muscleBar(name, score),
+                if (name != muscles.take(4).last.$1) const SizedBox(height: 6),
+              ],
+            ],
           ],
         ],
       ),
+    );
+  }
+
+  /// One compact "shoulders ▬▬▬ 6" row. Colour matches the BODY tab's
+  /// thresholds so the two screens agree on what counts as weak.
+  Widget _muscleBar(String name, double score) {
+    final color = score >= 7
+        ? kGreen
+        : score >= 5
+        ? kGold
+        : kPink;
+    return Row(
+      children: [
+        Expanded(
+          flex: 5,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              name,
+              maxLines: 1,
+              style: TextStyle(fontSize: 11, color: kTextMuted),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          flex: 4,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: (score / 10).clamp(0.0, 1.0),
+              minHeight: 3,
+              backgroundColor: kBgHighlight,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          score.toStringAsFixed(0),
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 

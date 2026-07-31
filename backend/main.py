@@ -901,6 +901,15 @@ async def get_dashboard(
             # Which muscles the scan rated weak/strong, so the dashboard can
             # say something useful about the scan instead of just its score.
             **dict(zip(("focus", "strong"), scan_highlights(sc))),
+            # Per-muscle scores, weakest first — the dashboard card shows the
+            # first few so it carries real scan detail, not just a headline.
+            "muscles": [
+                {"name": name, "score": float(sc[key])}
+                for name, key in sorted(
+                    (pair for pair in MUSCLE_SCORE_KEYS if sc.get(pair[1]) is not None),
+                    key=lambda pair: float(sc[pair[1]]),
+                )
+            ],
         }
         for i, sc in enumerate(physique_scans[::-1][:2])
     ]

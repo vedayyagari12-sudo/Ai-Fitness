@@ -16,6 +16,31 @@ import 'app_theme.dart';
 double navBarClearance(BuildContext context) =>
     MediaQuery.paddingOf(context).bottom;
 
+/// A bottom sheet that cannot overflow.
+///
+/// The default sheet is capped near half the screen and does not scroll, so
+/// any explainer longer than that just spilled off the bottom. This one grows
+/// with its content, scrolls once the content is taller than the screen
+/// allows, and stays clear of the system nav bar.
+Future<T?> showAppSheet<T>(BuildContext context, {required Widget child}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: AppColors.surface,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(ctx).height * 0.85,
+        ),
+        child: SingleChildScrollView(child: child),
+      ),
+    ),
+  );
+}
+
 // ── Shimmer loading box ───────────────────────────────────────────────────────
 class ShimmerBox extends StatefulWidget {
   const ShimmerBox({

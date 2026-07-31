@@ -251,6 +251,18 @@ class _TodayScreenState extends State<TodayScreen> {
     return ((scans.first[key] as List?) ?? []).cast<String>();
   }
 
+  /// Per-muscle scores from the latest scan, weakest first.
+  List<(String, double)> get _scanMuscles {
+    final scans = ((_dash?['recent_scans'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    if (scans.isEmpty) return const [];
+    return [
+      for (final m in ((scans.first['muscles'] as List?) ?? []))
+        if (m is Map<String, dynamic> && m['name'] != null)
+          (m['name'] as String, (m['score'] as num?)?.toDouble() ?? 0),
+    ];
+  }
+
   List<double> get _bfPoints {
     final charts = (_dash?['charts'] as List?) ?? [];
     final bf = charts.cast<Map<String, dynamic>?>().firstWhere(
@@ -334,6 +346,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 points: _bfPoints,
                 focus: _scanHighlight('focus'),
                 strong: _scanHighlight('strong'),
+                muscles: _scanMuscles,
               ),
             ),
             const SizedBox(width: 12),

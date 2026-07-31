@@ -62,6 +62,12 @@ void main() {
     // The longest muscle names, which is what the insight lines have to fit.
     focus: ['shoulders', 'hamstrings'],
     strong: ['quadriceps', 'shoulders'],
+    muscles: [
+      ('shoulders', 4),
+      ('hamstrings', 5.5),
+      ('chest', 7),
+      ('quadriceps', 9),
+    ],
   );
 
   Widget readinessCard() => const ReadinessCard(
@@ -230,6 +236,40 @@ void main() {
 
     expect(find.textContaining('Focus', findRichText: true), findsNothing);
     expect(find.textContaining('Strong', findRichText: true), findsNothing);
+  });
+
+  // Muscle detail is what fills the card's lower half; the names must render
+  // in full rather than being clipped to "should…".
+  testWidgets('physique card lists muscle scores in full', (tester) async {
+    await expectNoOverflow(tester, physiqueCard());
+
+    expect(find.text('shoulders'), findsOneWidget);
+    expect(find.text('hamstrings'), findsOneWidget);
+    expect(find.text('quadriceps'), findsOneWidget);
+  });
+
+  // One weigh-in is a real answer — the card used to nag for a second entry
+  // instead of showing the weight it already had.
+  testWidgets('weight tab shows a single weigh-in instead of nagging', (
+    tester,
+  ) async {
+    await expectNoOverflow(
+      tester,
+      const TrendCard(
+        goal: 'cut',
+        weightLbs: [162.0],
+        dailyCalories: [1, 1, 1, 1, 1, 1, 1],
+        dayLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        calorieTarget: 2200,
+        weeklyVolume: [100],
+      ),
+    );
+
+    await tester.tap(find.text('WEIGHT'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('162'), findsOneWidget);
+    expect(find.textContaining('two entries'), findsNothing);
   });
 
   // Each trend tab renders a different chart+header combination.

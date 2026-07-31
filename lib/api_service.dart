@@ -416,4 +416,13 @@ Future<void> syncOnboardingToProfile(dynamic data) async {
     'fitness_level': data.fitnessLevel,
     'updated_at': DateTime.now().toIso8601String(),
   });
+
+  // The weight given during onboarding is a real weigh-in, so record it as
+  // one. Without this the profile knows your weight but bodyweight_logs is
+  // empty, so the weight trend has a single point at best and never draws —
+  // it just keeps asking for "two entries".
+  final weightKg = data.weightKg as double?;
+  if (weightKg != null && weightKg > 0) {
+    await logBodyweight(weightKg);
+  }
 }
