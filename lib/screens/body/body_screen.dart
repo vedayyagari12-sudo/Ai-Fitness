@@ -514,7 +514,13 @@ class _BodyScreenState extends State<BodyScreen> {
       triggerTodayRefresh();
       _load();
     } else {
-      AppSnackbar.error(context, 'Could not save weight — try again');
+      final reason = resp?['error'];
+      AppSnackbar.error(
+        context,
+        reason is String && reason.isNotEmpty
+            ? 'Could not save weight — $reason'
+            : 'Could not save weight — try again',
+      );
     }
   }
 
@@ -704,10 +710,11 @@ class _BodyScreenState extends State<BodyScreen> {
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
-          SizedBox(
-            // Wide enough for the longest name plus a MAINTAIN chip at the
-            // larger type sizes.
-            width: 132,
+          // Proportional so every row still lines up, but a share of the
+          // width rather than a fixed 132px — at larger type that clipped
+          // "Shoulders" to "Sho…".
+          Expanded(
+            flex: 6,
             child: Row(
               children: [
                 Flexible(
@@ -717,7 +724,7 @@ class _BodyScreenState extends State<BodyScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -734,10 +741,13 @@ class _BodyScreenState extends State<BodyScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      m.lag ? 'FOCUS' : 'MAINTAIN',
+                      m.lag ? 'FOCUS' : 'OK',
+                      // Chrome, not content — kept at a fixed size so it
+                      // can't crowd out the muscle name it sits beside.
+                      textScaler: TextScaler.noScaling,
                       style: TextStyle(
                         color: m.lag ? kPink : kGreen,
-                        fontSize: 11,
+                        fontSize: 9.5,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
                       ),
@@ -749,6 +759,7 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(
+            flex: 4,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: (m.score / 10).clamp(0.0, 1.0)),
               duration: const Duration(milliseconds: 700),
@@ -847,10 +858,13 @@ class _BodyScreenState extends State<BodyScreen> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          SizedBox(
-            width: 74,
+          // Proportional rather than a fixed 74px, for the same reason as the
+          // scan-detail rows: long names wrapped mid-word.
+          Expanded(
+            flex: 4,
             child: Text(
               name,
+              maxLines: 1,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -859,6 +873,7 @@ class _BodyScreenState extends State<BodyScreen> {
             ),
           ),
           Expanded(
+            flex: 6,
             child: Stack(
               alignment: Alignment.centerLeft,
               children: [
@@ -1427,17 +1442,22 @@ class _BodyScreenState extends State<BodyScreen> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  SizedBox(
-                    width: 78,
+                  // Proportional, not a fixed 78px: "Shoulders" outgrew that
+                  // at the larger font sizes phones ship with and wrapped to
+                  // "Shoulder / s".
+                  Expanded(
+                    flex: 4,
                     child: Text(
                       name,
+                      maxLines: 1,
                       style: TextStyle(
                         color: AppColors.textSecondary,
-                        fontSize: 15,
+                        fontSize: 14,
                       ),
                     ),
                   ),
                   Expanded(
+                    flex: 6,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(

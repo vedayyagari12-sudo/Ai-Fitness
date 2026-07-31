@@ -110,7 +110,7 @@ class _TrendCardState extends State<TrendCard> {
         color: kBgElevated,
         borderRadius: BorderRadius.circular(10),
       ),
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       child: Row(
         children: [
           for (var i = 0; i < _segments.length; i++)
@@ -118,9 +118,15 @@ class _TrendCardState extends State<TrendCard> {
               child: GestureDetector(
                 onTap: () => setState(() => _selected = i),
                 behavior: HitTestBehavior.opaque,
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
                   alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  // Four words across a phone: the type has to be small and
+                  // tight, or the labels touch and the pills have no room to
+                  // breathe between them.
+                  margin: const EdgeInsets.symmetric(horizontal: 1),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
                   decoration: BoxDecoration(
                     color: _selected == i ? kBlue : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
@@ -129,10 +135,12 @@ class _TrendCardState extends State<TrendCard> {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       _segments[i],
+                      maxLines: 1,
+                      textScaler: TextScaler.noScaling,
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
                         color: _selected == i ? Colors.white : kTextMuted,
                       ),
                     ),

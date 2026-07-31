@@ -139,6 +139,13 @@ Future<Map<String, dynamic>?> logBodyweight(double weightKg) async {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
+    // Surface the server's reason — a blocked same-day update reports a
+    // specific, fixable cause that "Server error (500)" would hide.
+    try {
+      final detail =
+          (jsonDecode(response.body) as Map<String, dynamic>)['detail'];
+      if (detail is String && detail.isNotEmpty) return {'error': detail};
+    } catch (_) {}
     return {'error': 'Server error (${response.statusCode})'};
   } catch (e) {
     return {'error': 'Network error'};

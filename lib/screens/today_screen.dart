@@ -242,6 +242,15 @@ class _TodayScreenState extends State<TodayScreen> {
     return (scans.first['number'] as num?)?.toInt() ?? 0;
   }
 
+  /// Muscle groups the latest scan called out, for the TODAY physique card.
+  /// [key] is 'focus' (rated weak) or 'strong'.
+  List<String> _scanHighlight(String key) {
+    final scans = ((_dash?['recent_scans'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    if (scans.isEmpty) return const [];
+    return ((scans.first[key] as List?) ?? []).cast<String>();
+  }
+
   List<double> get _bfPoints {
     final charts = (_dash?['charts'] as List?) ?? [];
     final bf = charts.cast<Map<String, dynamic>?>().firstWhere(
@@ -323,6 +332,8 @@ class _TodayScreenState extends State<TodayScreen> {
                     : null,
                 deltaPositive: bfChange <= 0,
                 points: _bfPoints,
+                focus: _scanHighlight('focus'),
+                strong: _scanHighlight('strong'),
               ),
             ),
             const SizedBox(width: 12),

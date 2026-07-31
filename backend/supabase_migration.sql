@@ -41,5 +41,19 @@ CREATE POLICY "Users can insert own bodyweight logs"
   ON bodyweight_logs FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+-- Re-weighing on a day already logged is an UPDATE of that day's row, not a
+-- new insert. Without these the first weigh-in of the day succeeded and every
+-- correction after it was silently dropped by RLS (Postgrest reports a
+-- policy-filtered UPDATE as 200 with an empty body, not as an error).
+-- Safe to run on an existing database.
+CREATE POLICY "Users can update own bodyweight logs"
+  ON bodyweight_logs FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own bodyweight logs"
+  ON bodyweight_logs FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- If workouts table uses integer user_id, migrate to UUID:
 -- ALTER TABLE workouts ALTER COLUMN user_id TYPE TEXT USING user_id::TEXT;

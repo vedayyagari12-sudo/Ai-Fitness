@@ -59,6 +59,9 @@ void main() {
     scanCount: 12,
     delta: '-1.8% vs last scan',
     points: [28.4, 27.1, 26.3, 25.0, 24.7],
+    // The longest muscle names, which is what the insight lines have to fit.
+    focus: ['shoulders', 'hamstrings'],
+    strong: ['quadriceps', 'shoulders'],
   );
 
   Widget readinessCard() => const ReadinessCard(
@@ -202,6 +205,31 @@ void main() {
         ),
       ),
     );
+  });
+
+  // The insight lines fill what was dead space under the sparkline, so they
+  // must actually render — and only when the scan has something to say.
+  testWidgets('physique card shows what the scan found', (tester) async {
+    await expectNoOverflow(tester, physiqueCard());
+
+    expect(find.textContaining('Focus', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining('shoulders, hamstrings', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Strong', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('physique card omits insights when the scan has none', (
+    tester,
+  ) async {
+    await expectNoOverflow(
+      tester,
+      const PhysiqueMiniCard(bodyFat: 24.7, score: 80, scanCount: 2),
+    );
+
+    expect(find.textContaining('Focus', findRichText: true), findsNothing);
+    expect(find.textContaining('Strong', findRichText: true), findsNothing);
   });
 
   // Each trend tab renders a different chart+header combination.

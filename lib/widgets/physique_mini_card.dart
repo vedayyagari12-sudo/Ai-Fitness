@@ -14,6 +14,8 @@ class PhysiqueMiniCard extends StatelessWidget {
     this.delta,
     this.deltaPositive = true,
     this.points = const [],
+    this.focus = const [],
+    this.strong = const [],
   });
 
   /// Latest body fat %, null when the user has no scans yet.
@@ -23,6 +25,12 @@ class PhysiqueMiniCard extends StatelessWidget {
   final String? delta; // "-0.6% vs last scan"
   final bool deltaPositive; // true = trending the right way
   final List<double> points; // body-fat sparkline (last scans)
+
+  /// Muscle groups the latest scan rated weak (< 7/10), worst first.
+  final List<String> focus;
+
+  /// Muscle groups it rated strong (>= 7/10), best first.
+  final List<String> strong;
 
   @override
   Widget build(BuildContext context) {
@@ -150,9 +158,61 @@ class PhysiqueMiniCard extends StatelessWidget {
                         : 'Trend appears after another scan',
                     style: TextStyle(fontSize: 12, color: kTextMuted),
                   ),
+            // What the scan actually found. This card is stretched to match
+            // its neighbour, so without it the lower half is dead space.
+            if (focus.isNotEmpty || strong.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              if (focus.isNotEmpty)
+                _insight(Icons.trending_up_rounded, 'Focus', focus, kPink),
+              if (focus.isNotEmpty && strong.isNotEmpty)
+                const SizedBox(height: 5),
+              if (strong.isNotEmpty)
+                _insight(Icons.check_circle_rounded, 'Strong', strong, kGreen),
+            ],
           ],
         ],
       ),
+    );
+  }
+
+  /// One "Focus · shoulders, arms" line.
+  Widget _insight(
+    IconData icon,
+    String label,
+    List<String> names,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 12, color: color),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: RichText(
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '$label ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+                TextSpan(
+                  text: names.join(', '),
+                  style: TextStyle(fontSize: 11, color: kTextMuted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

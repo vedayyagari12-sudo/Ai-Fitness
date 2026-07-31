@@ -146,6 +146,36 @@ def last_n_dates(n: int = 7) -> list[date]:
     return [today - timedelta(days=n - 1 - i) for i in range(n)]
 
 
+MUSCLE_SCORE_KEYS = (
+    ("chest", "chest_score"),
+    ("back", "back_score"),
+    ("shoulders", "shoulders_score"),
+    ("arms", "arms_score"),
+    ("legs", "legs_score"),
+    ("core", "core_score"),
+)
+
+
+def scan_highlights(scan: dict) -> tuple[list[str], list[str]]:
+    """Weakest and strongest muscle groups from a physique scan.
+
+    Mirrors the BODY tab's rule: a muscle is a focus area only when the scan
+    genuinely rated it weak (< 7/10), not merely because it ranked lowest.
+    Returns ([focus], [strong]), each up to two names, either possibly empty.
+    """
+    scored = [
+        (name, float(scan[key]))
+        for name, key in MUSCLE_SCORE_KEYS
+        if scan.get(key) is not None
+    ]
+    if not scored:
+        return [], []
+    scored.sort(key=lambda pair: pair[1])
+    focus = [name for name, value in scored if value < 7][:2]
+    strong = [name for name, value in reversed(scored) if value >= 7][:2]
+    return focus, strong
+
+
 def parse_body_fat(value) -> float | None:
     if value is None:
         return None
@@ -613,10 +643,32 @@ async def log_bodyweight(
                 json={"weight_kg": log.weight_kg},
             )
             if resp.status_code in (200, 201) and not resp.json():
-                raise HTTPException(
-                    status_code=500,
-                    detail="Update was rejected (no row changed) — check bodyweight_logs UPDATE policy",
+                # bodyweight_logs ships with SELECT and INSERT policies but no
+                # UPDATE one, so the first weigh-in of a day succeeds and every
+                # correction after it is silently dropped. Retry with the
+                # service role, still pinned to the row id we just read back
+                # under the user's own token, so this cannot touch anyone
+                # else's data. Deployments without a service-role key get an
+                # actionable error instead of a silent failure.
+                if not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(
+                            "Could not update today's weight: bodyweight_logs has no RLS "
+                            "UPDATE policy. Run the UPDATE/DELETE policies in "
+                            "backend/supabase_migration.sql, or set SUPABASE_SERVICE_ROLE_KEY."
+                        ),
+                    )
+                resp = await client.patch(
+                    f"{SUPABASE_URL}/rest/v1/bodyweight_logs?id=eq.{row_id}&user_id=eq.{user_id}",
+                    headers={**supabase_admin_headers(), "Prefer": "return=representation"},
+                    json={"weight_kg": log.weight_kg},
                 )
+                if resp.status_code in (200, 201) and not resp.json():
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Update affected no rows even as service role — check bodyweight_logs policies",
+                    )
         else:
             resp = await client.post(
                 f"{SUPABASE_URL}/rest/v1/bodyweight_logs",
@@ -638,7 +690,9 @@ async def get_today_bodyweight(
     today = datetime.now(timezone.utc).date().isoformat()
     logs = await fetch_supabase_table(
         "bodyweight_logs",
-        f"user_id=eq.{user_id}&created_at=gte.{today}T00:00:00&select=weight_kg&limit=1",
+        # Ordered: limit=1 without it returns an arbitrary row, so on a day
+        # with more than one entry this could report a stale weight.
+        f"user_id=eq.{user_id}&created_at=gte.{today}T00:00:00&select=weight_kg&order=created_at.desc&limit=1",
         token=credentials.credentials,
     )
     if logs:
@@ -710,7 +764,9 @@ async def get_dashboard(
     )
     physique_scans = await fetch_supabase_table(
         "physique_scans",
-        f"user_id=eq.{user_id}&order=created_at.asc&select=body_fat_estimate,overall_score,created_at",
+        f"user_id=eq.{user_id}&order=created_at.asc"
+        "&select=body_fat_estimate,overall_score,created_at,"
+        "chest_score,back_score,shoulders_score,arms_score,legs_score,core_score",
         token=credentials.credentials,
     )
 
@@ -842,6 +898,9 @@ async def get_dashboard(
             "body_fat": parse_body_fat(sc.get("body_fat_estimate")) or 0.0,
             "score": sc.get("overall_score"),
             "created_at": sc.get("created_at"),
+            # Which muscles the scan rated weak/strong, so the dashboard can
+            # say something useful about the scan instead of just its score.
+            **dict(zip(("focus", "strong"), scan_highlights(sc))),
         }
         for i, sc in enumerate(physique_scans[::-1][:2])
     ]
