@@ -21,39 +21,45 @@ class SegmentedBar extends StatelessWidget {
         border: Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: List.generate(labels.length, (i) {
-          final selected = i == index;
-          return GestureDetector(
-            onTap: () => onChanged(i),
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 24),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: selected ? AppColors.accent : Colors.transparent,
-                      width: 2,
+      // Scrolls only when the labels don't fit ("BODY FAT · WEIGHT · SCORE"
+      // runs ~54px past a 360dp screen). Identical layout when they do.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
+        child: Row(
+          children: List.generate(labels.length, (i) {
+            final selected = i == index;
+            return GestureDetector(
+              onTap: () => onChanged(i),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 24),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: selected ? AppColors.accent : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      color: selected
+                          ? AppColors.textPrimary
+                          : AppColors.textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ),
-                child: Text(
-                  labels[i],
-                  style: TextStyle(
-                    color: selected
-                        ? AppColors.textPrimary
-                        : AppColors.textMuted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
-                ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }

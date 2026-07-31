@@ -1329,21 +1329,36 @@ class _BodyScreenState extends State<BodyScreen> {
             children: [
               Row(
                 children: [
-                  Text(
-                    'Scan #$number',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    _dateLabel(scan['created_at'] as String?),
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 14,
-                      letterSpacing: 0.6,
+                  // The label + date pair shares the row with two 18px stat
+                  // numbers; unflexed, a long date pushed those off the edge.
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Scan #$number',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            _dateLabel(scan['created_at'] as String?),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 14,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const Spacer(),

@@ -959,7 +959,11 @@ class _AiSessionViewState extends State<AiSessionView> {
                       ),
               ),
               const SizedBox(width: 4),
+              // flex 3 vs 2: `repsRaw` can be prose ("30-45 sec hold per
+              // arm"), which unflexed squeezed the name column to a single
+              // character wide and still ran off the row.
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -988,6 +992,8 @@ class _AiSessionViewState extends State<AiSessionView> {
                       const SizedBox(height: 2),
                       Text(
                         e.muscleGroup!.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 10,
@@ -1000,12 +1006,18 @@ class _AiSessionViewState extends State<AiSessionView> {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                '${e.sets} × ${e.repsRaw}',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                flex: 2,
+                child: Text(
+                  '${e.sets} × ${e.repsRaw}',
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],

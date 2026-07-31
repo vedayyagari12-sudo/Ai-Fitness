@@ -212,38 +212,34 @@ class _TrendCardState extends State<TrendCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _formatThousands(today.round()),
-                  style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    color: kTextPrimary,
-                    height: 1.0,
-                  ),
+        // Scaled as a unit rather than ellipsised — truncating this to
+        // "2,562 kcal…" hid the word it was building to.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatThousands(today.round()),
+                style: TextStyle(
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                  color: kTextPrimary,
+                  height: 1.0,
                 ),
               ),
-            ),
-            const SizedBox(width: 4),
-            // Flexible: at a 4-digit intake and a 4-digit target this pair
-            // runs past a narrow phone otherwise.
-            Flexible(
-              child: Padding(
+              const SizedBox(width: 4),
+              Padding(
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
                   '/ ${_formatThousands(target.round())} kcal today',
                   style: kStatCaption,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -330,6 +326,10 @@ class _TrendCardState extends State<TrendCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   widget.dayLabels[i].toUpperCase(),
+                  // Chart geometry is fixed, so the axis must not grow with
+                  // the system font — at large sizes 7 day labels ran
+                  // together into one unreadable strip.
+                  textScaler: TextScaler.noScaling,
                   style: kAxisLabel,
                 ),
               );
@@ -638,6 +638,7 @@ class _TrendCardState extends State<TrendCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   weeksAgo == 0 ? 'NOW' : '-${weeksAgo}w',
+                  textScaler: TextScaler.noScaling,
                   style: kAxisLabel,
                 ),
               );
@@ -796,6 +797,7 @@ class _TrendCardState extends State<TrendCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   weeksAgo == 0 ? 'NOW' : '-${weeksAgo}w',
+                  textScaler: TextScaler.noScaling,
                   style: kAxisLabel,
                 ),
               );

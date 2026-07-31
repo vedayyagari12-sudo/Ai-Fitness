@@ -510,13 +510,22 @@ class _TodayScreenState extends State<TodayScreen> {
         ),
     ];
 
-    return SizedBox(
-      height: 92,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: thumbs.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => thumbs[i],
+    // A Row inside a horizontal scroller instead of a fixed-height ListView:
+    // the strip then measures itself against the tallest card, so it can't
+    // clip the subtitle the way a hard-coded 92 did at larger font sizes.
+    // IntrinsicHeight keeps the cards a uniform height.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < thumbs.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              thumbs[i],
+            ],
+          ],
+        ),
       ),
     );
   }

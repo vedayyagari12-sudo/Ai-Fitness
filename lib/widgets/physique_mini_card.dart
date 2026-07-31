@@ -36,15 +36,25 @@ class PhysiqueMiniCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(child: Text('PHYSIQUE', style: kLabelSmall)),
-              if (scanCount > 0)
-                Text(
-                  '$scanCount scan${scanCount == 1 ? '' : 's'}',
-                  style: TextStyle(fontSize: 12, color: kTextMuted),
-                ),
-            ],
+          // Half-screen card: "PHYSIQUE" alongside "12 scans" doesn't fit at
+          // full size and was breaking mid-word ("PHYSIQU / E"). Scale the
+          // pair down together instead.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                Text('PHYSIQUE', maxLines: 1, style: kLabelSmall),
+                if (scanCount > 0) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '$scanCount scan${scanCount == 1 ? '' : 's'}',
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 12, color: kTextMuted),
+                  ),
+                ],
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           if (bodyFat == null) ...[
@@ -97,15 +107,20 @@ class PhysiqueMiniCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.star_rounded, size: 14, color: kLime),
                   const SizedBox(width: 3),
+                  // Scaled rather than ellipsised — "Score 55…" hides the
+                  // number, which is the whole point of the line.
                   Flexible(
-                    child: Text(
-                      'Score $score/100',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: kLime,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Score $score/100',
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: kLime,
+                        ),
                       ),
                     ),
                   ),
@@ -125,20 +140,16 @@ class PhysiqueMiniCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
-            SizedBox(
-              height: 30,
-              child: points.length >= 2
-                  ? LineChart(_sparklineData())
-                  : Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        scanCount <= 1
-                            ? 'Scan again to unlock your trend'
-                            : 'Trend appears after another scan',
-                        style: TextStyle(fontSize: 12, color: kTextMuted),
-                      ),
-                    ),
-            ),
+            points.length >= 2
+                ? SizedBox(height: 30, child: LineChart(_sparklineData()))
+                : Text(
+                    // Not height-capped: at 30px this two-line hint was
+                    // clipped to "Scan again to".
+                    scanCount <= 1
+                        ? 'Scan again to unlock your trend'
+                        : 'Trend appears after another scan',
+                    style: TextStyle(fontSize: 12, color: kTextMuted),
+                  ),
           ],
         ],
       ),
