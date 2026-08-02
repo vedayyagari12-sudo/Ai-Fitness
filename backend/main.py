@@ -151,6 +151,7 @@ MUSCLE_SCORE_KEYS = (
     ("back", "back_score"),
     ("lats", "lats_score"),
     ("mid back", "mid_back_score"),
+    ("traps", "traps_score"),
     ("shoulders", "shoulders_score"),
     ("arms", "arms_score"),
     ("legs", "legs_score"),
@@ -768,7 +769,7 @@ async def get_dashboard(
         "physique_scans",
         f"user_id=eq.{user_id}&order=created_at.asc"
         "&select=body_fat_estimate,overall_score,created_at,"
-        "chest_score,back_score,lats_score,mid_back_score,"
+        "chest_score,back_score,lats_score,mid_back_score,traps_score,"
         "shoulders_score,arms_score,legs_score,core_score",
         token=credentials.credentials,
     )
@@ -1086,7 +1087,8 @@ Return ONLY this JSON with no other text:
         "chest": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
         "back": {"score": <0-10>, "feedback": "<overall back development>"} or null if not visible,
         "lats": {"score": <0-10>, "feedback": "<width and V-taper, from a back or rear-lat-spread photo>"} or null if not visible,
-        "mid_back": {"score": <0-10>, "feedback": "<traps, rhomboids and thickness between the shoulder blades>"} or null if not visible,
+        "mid_back": {"score": <0-10>, "feedback": "<rhomboids and thickness between the shoulder blades>"} or null if not visible,
+        "traps": {"score": <0-10>, "feedback": "<upper trapezius, the slope from neck to shoulders>"} or null if not visible,
         "shoulders": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
         "arms": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
         "legs": {"score": <0-10>, "feedback": "<specific feedback>"} or null if not visible,
@@ -1133,6 +1135,7 @@ def _physique_scan_row(user_id: str, scan_data: dict) -> dict:
         # Back detail, scored only when a back photo was supplied.
         "lats_score": (muscle_groups.get("lats") or {}).get("score"),
         "mid_back_score": (muscle_groups.get("mid_back") or {}).get("score"),
+        "traps_score": (muscle_groups.get("traps") or {}).get("score"),
         "shoulders_score": (muscle_groups.get("shoulders") or {}).get("score"),
         "arms_score": (muscle_groups.get("arms") or {}).get("score"),
         "legs_score": (muscle_groups.get("legs") or {}).get("score"),

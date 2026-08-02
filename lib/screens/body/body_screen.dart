@@ -89,6 +89,7 @@ class _BodyScreenState extends State<BodyScreen> {
     // no score are skipped, so front-only scans are unaffected.
     ('Lats', 'lats_score'),
     ('Mid Back', 'mid_back_score'),
+    ('Traps', 'traps_score'),
     ('Shoulders', 'shoulders_score'),
     ('Arms', 'arms_score'),
     ('Legs', 'legs_score'),
@@ -1580,15 +1581,34 @@ class _BodyScreenState extends State<BodyScreen> {
 /// Muscle map — a simple front-body silhouette with each region tinted by
 /// its latest scan score (green = strong, gold = medium, red = lagging,
 /// grey = not assessed). Replaces the old empty "body render" placeholder.
-class _MuscleMapCard extends StatelessWidget {
+class _MuscleMapCard extends StatefulWidget {
   const _MuscleMapCard({required this.scores, this.scanDate});
 
-  /// Scores 0-10 keyed by: chest, back, shoulders, arms, legs, core.
+  /// Scores 0-10 keyed by: chest, back, lats, mid back, traps, shoulders,
+  /// arms, legs, core.
   final Map<String, double?> scores;
   final String? scanDate;
 
   @override
+  State<_MuscleMapCard> createState() => _MuscleMapCardState();
+}
+
+class _MuscleMapCardState extends State<_MuscleMapCard> {
+  bool _back = false;
+
+  /// Back regions only carry a score when the scan had a back photo. With
+  /// none of them scored there is nothing to show back-side, so the toggle
+  /// stays hidden rather than offering an entirely grey figure.
+  bool get _hasBackDetail => const [
+    'lats',
+    'mid back',
+    'traps',
+    'back',
+  ].any((k) => widget.scores[k] != null);
+
+  @override
   Widget build(BuildContext context) {
+    final showToggle = _hasBackDetail;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -1600,20 +1620,67 @@ class _MuscleMapCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            scanDate != null ? 'MUSCLE MAP · $scanDate' : 'MUSCLE MAP',
+            widget.scanDate != null
+                ? 'MUSCLE MAP · ${widget.scanDate}'
+                : 'MUSCLE MAP',
             style: kLabelSmall.copyWith(fontSize: 8),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 6),
+          if (showToggle) ...[_frontBackToggle(), const SizedBox(height: 6)],
           Expanded(
             child: Center(
               child: AspectRatio(
                 aspectRatio: 0.55,
-                child: CustomPaint(painter: _MuscleMapPainter(scores: scores)),
+                child: CustomPaint(
+                  painter: _back && showToggle
+                      ? _BackMuscleMapPainter(scores: widget.scores)
+                      : _MuscleMapPainter(scores: widget.scores),
+                ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _frontBackToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: kBgElevated,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        children: [
+          for (final (label, isBack) in [('FRONT', false), ('BACK', true)])
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _back = isBack),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _back == isBack ? kPink : Colors.transparent,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    label,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                      color: _back == isBack ? Colors.black : kTextMuted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1678,14 +1745,16 @@ class _MuscleMapPainter extends CustomPainter {
     canvas.drawRRect(neck, neutral);
     canvas.drawRRect(neck, contour);
 
-    // ── Traps (back score) — sloping band from neck to shoulders ─────
+    // ── Traps — the slope from neck to shoulders, visible from the front
+    //    too. Falls back to the overall back score on older scans, which
+    //    have no traps score stored. ────────────────────────────────────
     final traps = Path()
       ..moveTo(0.36 * w, 0.165 * h)
       ..lineTo(0.455 * w, 0.125 * h)
       ..lineTo(0.545 * w, 0.125 * h)
       ..lineTo(0.64 * w, 0.165 * h)
       ..close();
-    canvas.drawPath(traps, fill('back'));
+    canvas.drawPath(traps, fill(scores['traps'] != null ? 'traps' : 'back'));
     canvas.drawPath(traps, contour);
 
     // ── Delts (shoulders) — rounded caps ──────────────────────────────
@@ -1776,3 +1845,193 @@ class _MuscleMapPainter extends CustomPainter {
   bool shouldRepaint(_MuscleMapPainter old) =>
       old.scores != scores || old._brightness != _brightness;
 }
+
+/// Back view of the muscle map. Deliberately shares the front view's
+/// proportions — same head, neck, delt and leg geometry — so flipping
+/// between the two reads as turning one figure around rather than swapping
+/// to a different drawing.
+class _BackMuscleMapPainter extends CustomPainter {
+  _BackMuscleMapPainter({required this.scores})
+    : _brightness = AppColors.brightness;
+
+  final Map<String, double?> scores;
+  final Brightness _brightness;
+
+  Color _tint(String region, [double alpha = 0.8]) {
+    final v = scores[region];
+    if (v == null) return kBodyUnscored;
+    final hue = v >= 7
+        ? kGreen
+        : v >= 5
+        ? kGold
+        : kPink;
+    return Color.alphaBlend(hue.withValues(alpha: alpha), kBgCard);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    Paint fill(String region, [double alpha = 0.8]) =>
+        Paint()..color = _tint(region, alpha);
+    final neutral = Paint()..color = kBodyNeutral;
+    final contour = Paint()
+      ..color = kBodyContour
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
+    final divider = Paint()
+      ..color = kBodyContour
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    RRect rr(double l, double t, double r, double b, [double rad = 8]) =>
+        RRect.fromLTRBR(l * w, t * h, r * w, b * h, Radius.circular(rad));
+    Offset o(double x, double y) => Offset(x * w, y * h);
+    Path poly(List<(double, double)> pts) {
+      final p = Path()..moveTo(pts.first.$1 * w, pts.first.$2 * h);
+      for (final pt in pts.skip(1)) {
+        p.lineTo(pt.$1 * w, pt.$2 * h);
+      }
+      return p..close();
+    }
+
+    // ── Head & neck (neutral) — identical to the front ────────────────
+    final head = Rect.fromCenter(
+      center: o(0.5, 0.055),
+      width: 0.13 * w,
+      height: 0.09 * h,
+    );
+    canvas.drawOval(head, neutral);
+    canvas.drawOval(head, contour);
+    final neck = rr(0.455, 0.09, 0.545, 0.125, 3);
+    canvas.drawRRect(neck, neutral);
+    canvas.drawRRect(neck, contour);
+
+    // ── Traps — the slope from neck out to each shoulder ──────────────
+    final traps = poly([
+      (0.355, 0.19),
+      (0.455, 0.125),
+      (0.545, 0.125),
+      (0.645, 0.19),
+      (0.575, 0.255),
+      (0.425, 0.255),
+    ]);
+    canvas.drawPath(traps, fill('traps'));
+    canvas.drawPath(traps, contour);
+    canvas.drawLine(o(0.5, 0.135), o(0.5, 0.25), divider);
+
+    // ── Rear delts — same caps as the front view ──────────────────────
+    for (final dx in [0.265, 0.735]) {
+      final delt = Rect.fromCenter(
+        center: o(dx, 0.185),
+        width: 0.15 * w,
+        height: 0.07 * h,
+      );
+      canvas.drawOval(delt, fill('shoulders'));
+      canvas.drawOval(delt, contour);
+    }
+
+    // ── Lats — wings flaring from the armpit and tapering to the waist,
+    //    which is what gives the V-taper its shape ─────────────────────
+    for (final left in [true, false]) {
+      double x(double v) => left ? v : 1 - v;
+      final lat = poly([
+        (x(0.305), 0.25),
+        (x(0.435), 0.26),
+        (x(0.445), 0.465),
+        (x(0.365), 0.45),
+      ]);
+      canvas.drawPath(lat, fill('lats'));
+      canvas.drawPath(lat, contour);
+      // Two sweep lines hint at the fanning fibres.
+      for (final t in [0.32, 0.39]) {
+        canvas.drawLine(o(x(0.34), t), o(x(0.43), t + 0.015), divider);
+      }
+    }
+
+    // ── Mid back — the rhomboid block between the shoulder blades ─────
+    final mid = rr(0.44, 0.265, 0.56, 0.365, 6);
+    canvas.drawRRect(mid, fill('mid back'));
+    canvas.drawRRect(mid, contour);
+    canvas.drawLine(o(0.5, 0.275), o(0.5, 0.355), divider);
+
+    // ── Lower back — erectors either side of the spine ────────────────
+    final lower = rr(0.45, 0.375, 0.55, 0.47, 6);
+    canvas.drawRRect(lower, fill('back'));
+    canvas.drawRRect(lower, contour);
+    canvas.drawLine(o(0.5, 0.385), o(0.5, 0.46), divider);
+
+    // ── Arms — triceps + forearm, mirroring the front geometry ────────
+    void arm(bool left) {
+      final sign = left ? -1.0 : 1.0;
+      final sx = 0.5 + sign * 0.235;
+      final upper = poly([
+        (sx - 0.045, 0.215),
+        (sx + 0.045, 0.215),
+        (sx + sign * 0.03 + 0.04, 0.36),
+        (sx + sign * 0.03 - 0.04, 0.36),
+      ]);
+      canvas.drawPath(upper, fill('arms'));
+      canvas.drawPath(upper, contour);
+      final fx = sx + sign * 0.035;
+      final fore = poly([
+        (fx - 0.033, 0.375),
+        (fx + 0.033, 0.375),
+        (fx + sign * 0.02 + 0.025, 0.52),
+        (fx + sign * 0.02 - 0.025, 0.52),
+      ]);
+      canvas.drawPath(fore, fill('arms', 0.55));
+      canvas.drawPath(fore, contour);
+    }
+
+    arm(true);
+    arm(false);
+
+    // ── Glutes — the one region the front view has no equivalent for ──
+    for (final left in [true, false]) {
+      final cx = 0.5 + (left ? -0.075 : 0.075);
+      final glute = rr(cx - 0.062, 0.48, cx + 0.062, 0.565, 12);
+      canvas.drawRRect(glute, fill('legs'));
+      canvas.drawRRect(glute, contour);
+    }
+
+    // ── Hamstrings + calves — same taper as the front's quads ─────────
+    void leg(bool left) {
+      final cx = 0.5 + (left ? -0.075 : 0.075);
+      final ham = poly([
+        (cx - 0.07, 0.575),
+        (cx + 0.07, 0.575),
+        (cx + 0.05, 0.735),
+        (cx - 0.05, 0.735),
+      ]);
+      canvas.drawPath(ham, fill('legs'));
+      canvas.drawPath(ham, contour);
+      final calf = poly([
+        (cx - 0.045, 0.755),
+        (cx + 0.045, 0.755),
+        (cx + 0.03, 0.955),
+        (cx - 0.03, 0.955),
+      ]);
+      canvas.drawPath(calf, fill('legs', 0.55));
+      canvas.drawPath(calf, contour);
+    }
+
+    leg(true);
+    leg(false);
+  }
+
+  @override
+  bool shouldRepaint(_BackMuscleMapPainter old) =>
+      old.scores != scores || old._brightness != _brightness;
+}
+
+// The muscle map is drawn on a raw canvas, so the widget tree says nothing
+// about whether a region landed in the right place. These aliases let the
+// painters be rendered and sampled directly from tests without making them
+// part of the screen's public surface.
+@visibleForTesting
+typedef MuscleMapPainterForTest = _MuscleMapPainter;
+
+@visibleForTesting
+typedef BackMuscleMapPainterForTest = _BackMuscleMapPainter;

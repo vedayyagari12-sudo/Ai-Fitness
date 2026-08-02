@@ -414,16 +414,15 @@ class _TodayScreenState extends State<TodayScreen> {
     final dateLabel =
         '${days[now.weekday - 1]} · ${months[now.month - 1]} ${now.day}';
 
-    final email = Supabase.instance.client.auth.currentUser?.email ?? '';
-    final rawName = email.split('@').first;
-    final name = rawName.isEmpty
-        ? 'there'
-        : rawName[0].toUpperCase() + rawName.substring(1);
     final greeting = now.hour < 12
         ? 'Good morning'
         : now.hour < 17
         ? 'Good afternoon'
         : 'Good evening';
+    // Avatar initial only — the email itself no longer appears in the
+    // greeting.
+    final email = Supabase.instance.client.auth.currentUser?.email ?? '';
+    final avatarInitial = email.isNotEmpty ? email[0].toUpperCase() : '?';
 
     final streakCount = (_streak?['current_streak'] as num?)?.toInt() ?? 0;
     // activity_today is a list of activity kinds (["workout", "meal"]).
@@ -440,7 +439,7 @@ class _TodayScreenState extends State<TodayScreen> {
               Text(dateLabel, style: kLabelSmall.copyWith(fontSize: 11)),
               const SizedBox(height: 2),
               Text(
-                '$greeting, $name',
+                greeting,
                 style: kHeadlineMedium.copyWith(fontSize: 26),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -477,7 +476,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                  avatarInitial,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,

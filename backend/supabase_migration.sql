@@ -65,6 +65,7 @@ ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS training_split TEXT;
 -- Back detail from a physique scan. Null on scans with no back photo.
 ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS lats_score FLOAT;
 ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS mid_back_score FLOAT;
+ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS traps_score FLOAT;
 
 -- If workouts table uses integer user_id, migrate to UUID:
 -- ALTER TABLE workouts ALTER COLUMN user_id TYPE TEXT USING user_id::TEXT;
