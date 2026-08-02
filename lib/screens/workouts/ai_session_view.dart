@@ -972,11 +972,15 @@ class _AiSessionViewState extends State<AiSessionView> {
                         Flexible(
                           child: Text(
                             e.exercise,
-                            maxLines: 1,
+                            // Two lines, not one-plus-ellipsis: names like
+                            // "Single-Arm Dumbbell Row" don't fit a half-row
+                            // and truncating them hides which lift it is.
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: AppColors.textPrimary,
-                              fontSize: 16,
+                              fontSize: 15,
+                              height: 1.2,
                               fontWeight: FontWeight.w600,
                               decoration: done
                                   ? TextDecoration.lineThrough

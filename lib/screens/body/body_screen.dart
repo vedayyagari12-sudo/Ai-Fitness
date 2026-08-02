@@ -85,6 +85,10 @@ class _BodyScreenState extends State<BodyScreen> {
   static const _muscleKeys = [
     ('Chest', 'chest_score'),
     ('Back', 'back_score'),
+    // Back detail — only scored when the scan had a back photo, and rows with
+    // no score are skipped, so front-only scans are unaffected.
+    ('Lats', 'lats_score'),
+    ('Mid Back', 'mid_back_score'),
     ('Shoulders', 'shoulders_score'),
     ('Arms', 'arms_score'),
     ('Legs', 'legs_score'),
@@ -1002,10 +1006,17 @@ class _BodyScreenState extends State<BodyScreen> {
       _ => 'Scan again to track body fat over time',
     };
 
+    // Charts show a recent window, not the whole history. These series grow
+    // without bound (one entry per scan / per day logged), and past a few
+    // dozen points the bars are thinner than their own value labels. Lines
+    // hold more than bars because their labels are already thinned out.
+    List<(String, double)> tail(List<(String, double)> s, int max) =>
+        s.length <= max ? s : s.sublist(s.length - max);
+
     final series = switch (_metricTab) {
-      1 => weightSeries,
-      2 => scoreSeries,
-      _ => bfSeries,
+      1 => tail(weightSeries, 30),
+      2 => tail(scoreSeries, 10),
+      _ => tail(bfSeries, 30),
     };
 
     return Container(
@@ -1244,6 +1255,9 @@ class _BodyScreenState extends State<BodyScreen> {
   /// Physique score as bars — one per scan, latest highlighted.
   Widget _scoreBars(List<(String, double)> series) {
     final maxVal = series.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
+    // Bars thin out as the series grows so they always sit inside their own
+    // slot with a gap, instead of merging into a solid block.
+    final barWidth = (240 / series.length * 0.55).clamp(4.0, 14.0);
     return BarChart(
       BarChartData(
         // Headroom for the always-on value labels.
@@ -1278,7 +1292,7 @@ class _BodyScreenState extends State<BodyScreen> {
               barRods: [
                 BarChartRodData(
                   toY: series[i].$2,
-                  width: 14,
+                  width: barWidth,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4),
                   ),

@@ -46,7 +46,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _save(String key, dynamic value) async {
     setState(() => _profile[key] = value);
-    await upsertUserProfile({key: value});
+    try {
+      await upsertUserProfile({key: value});
+    } catch (e) {
+      // Don't claim "Saved" when the write failed — a missing column or an
+      // RLS rejection would otherwise look identical to success.
+      if (mounted) AppSnackbar.error(context, 'Could not save — $e');
+      return;
+    }
     // Weight edited here also feeds the BODY tab's daily log/trend chart —
     // otherwise a manual profile edit and the logged-weight history quietly
     // disagree with each other.

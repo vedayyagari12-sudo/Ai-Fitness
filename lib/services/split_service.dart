@@ -113,14 +113,23 @@ class SplitService {
       rest,
       rest,
     ],
-    // Balanced rotation with two recovery days.
+    // PPL + upper/lower hybrid, five sessions with two recovery days.
+    //
+    // Every muscle group gets trained twice a week — the frequency the
+    // hypertrophy literature converges on — with at least 48h between
+    // repeat exposures:
+    //   chest/shoulders/triceps  Mon (push) + Fri (upper)
+    //   back/biceps              Tue (pull) + Fri (upper)
+    //   legs                     Wed (legs) + Sat (lower)
+    // The previous rotation ended Upper Body → Full Body back to back, which
+    // trained the upper body on consecutive days and left legs trailing.
     TrainingSplit.auto => const [
       'Push',
       'Pull',
       'Legs',
       rest,
       'Upper Body',
-      'Full Body',
+      'Lower Body',
       rest,
     ],
   };

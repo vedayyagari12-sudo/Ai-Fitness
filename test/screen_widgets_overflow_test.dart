@@ -100,55 +100,70 @@ void main() {
     });
   }
 
-  // The TRAIN exercise row: `repsRaw` is free text from the model, so a
-  // prose value has to shrink the row rather than overflow it. This mirrors
-  // the row's flex layout (name 3 : reps 2).
-  for (final reps in ['12-15', '30-45 sec hold per arm', '8']) {
-    testWidgets('exercise row fits reps "$reps"', (tester) async {
-      await pump(
-        tester,
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
+  // The TRAIN exercise row: both the name and `repsRaw` are free text from
+  // the model, so either can be long. This mirrors the row's flex layout
+  // (name 3 : reps 2).
+  Widget exerciseRow(String name, String reps) => Padding(
+    padding: const EdgeInsets.all(20),
+    child: Row(
+      children: [
+        const SizedBox(width: 24, child: Text('3')),
+        const SizedBox(width: 4),
+        Expanded(
+          flex: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(width: 24, child: Text('3')),
-              const SizedBox(width: 4),
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Suspended Hamstring Curls',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    Text(
-                      'ERECTOR SPINAE',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10),
-                    ),
-                  ],
-                ),
+              Text(
+                name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 15, height: 1.2),
               ),
-              const SizedBox(width: 10),
-              Flexible(
-                flex: 2,
-                child: Text(
-                  '4 × $reps',
-                  textAlign: TextAlign.right,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 17),
-                ),
+              const Text(
+                'ERECTOR SPINAE',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10),
               ),
             ],
           ),
         ),
+        const SizedBox(width: 10),
+        Flexible(
+          flex: 2,
+          child: Text(
+            '4 × $reps',
+            textAlign: TextAlign.right,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 17),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  for (final reps in ['12-15', '30-45 sec hold per arm', '8']) {
+    testWidgets('exercise row fits reps "$reps"', (tester) async {
+      await pump(
+        tester,
+        exerciseRow('Suspended Hamstring Curls', reps),
         textScale: 1.3,
       );
+    });
+  }
+
+  // Exercise names come from the model and get long.
+  const longNames = [
+    'Single-Arm Dumbbell Row',
+    'Bulgarian Split Squat (Rear Foot Elevated)',
+    'Incline Dumbbell Bench Press',
+    'Cable Face Pull With External Rotation',
+  ];
+  for (final name in longNames) {
+    testWidgets('exercise row fits the name "$name"', (tester) async {
+      await pump(tester, exerciseRow(name, '3 × 12'), textScale: 1.3);
     });
   }
 }
