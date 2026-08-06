@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
@@ -7,24 +10,77 @@ import 'screens/onboarding/onboarding_flow.dart';
 import 'screens/body/body_screen.dart';
 import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
+import 'services/error_reporter.dart';
 import 'services/nav_service.dart';
 import 'services/today_cache.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'screens/workouts/workouts_tab_screen.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await ThemeController.load();
-  await Supabase.initialize(
-    url: 'https://jfopizywtgaqhkbkjlyz.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmb3Bpenl3dGdhcWhrYmtqbHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDU0NTYsImV4cCI6MjA5MDcyMTQ1Nn0.Y2CbDOSoVA3AP8E6JZJ0Vi6p1LE8U4WO87PXAkRQIOk',
+void main() {
+  // runZonedGuarded so an async error thrown outside a widget callback is
+  // caught too — otherwise it reaches the platform and takes the app down
+  // with nothing recorded about why.
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+        ErrorReporter.report(
+          details.exception,
+          stack: details.stack,
+          context: 'flutter:${details.library ?? 'widgets'}',
+        );
+      };
+      PlatformDispatcher.instance.onError = (error, stack) {
+        ErrorReporter.report(error, stack: stack, context: 'platform');
+        return true;
+      };
+      // A framework error normally paints the grey/red error box. Users read
+      // that as "the app is broken"; this at least says so in the app's own
+      // voice.
+      ErrorWidget.builder = (details) => const _AppErrorBox();
+
+      await ThemeController.load();
+      await Supabase.initialize(
+        url: 'https://jfopizywtgaqhkbkjlyz.supabase.co',
+        anonKey:
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impmb3Bpenl3dGdhcWhrYmtqbHl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDU0NTYsImV4cCI6MjA5MDcyMTQ1Nn0.Y2CbDOSoVA3AP8E6JZJ0Vi6p1LE8U4WO87PXAkRQIOk',
+      );
+      // Onboarding state used to be stored device-wide; drop those keys so a
+      // new account on this device is gated on its own (per-user) flag.
+      await AppStateService.clearLegacyOnboardingState();
+
+      // Wake the backend while the user is still on the login/onboarding
+      // screen. The host sleeps when idle, and a cold start on the first real
+      // request otherwise lands as a ~50s wait on a spinner.
+      unawaited(warmUpBackend());
+
+      runApp(const MyApp());
+    },
+    (error, stack) =>
+        ErrorReporter.report(error, stack: stack, context: 'uncaught'),
   );
-  // Onboarding state used to be stored device-wide; drop those keys so a new
-  // account on this device is gated on its own (per-user) flag.
-  await AppStateService.clearLegacyOnboardingState();
-  runApp(const MyApp());
+}
+
+/// Shown in place of the framework's grey error box.
+class _AppErrorBox extends StatelessWidget {
+  const _AppErrorBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.all(20),
+      alignment: Alignment.center,
+      child: Text(
+        "Something went wrong here.\nPull to refresh, or reopen the app.",
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -120,7 +176,11 @@ class _OnboardingGateState extends State<_OnboardingGate> {
           if (mounted) setState(() => _onboardingDone = true);
           return;
         }
-      } catch (_) {}
+      } catch (e, s) {
+        // Falls through to showing onboarding. Worth recording: if this is
+        // failing, returning users get sent back through onboarding.
+        ErrorReporter.report(e, stack: s, context: 'onboardingGate');
+      }
     }
     if (mounted) setState(() => _onboardingDone = false);
   }

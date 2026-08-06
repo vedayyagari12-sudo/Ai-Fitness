@@ -2,6 +2,8 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 
+import 'services/error_reporter.dart';
+
 const String baseUrl = 'https://fitness-app-xayv.onrender.com';
 
 Map<String, String> getHeaders() {
@@ -14,6 +16,22 @@ String? getCurrentUserId() {
   return Supabase.instance.client.auth.currentUser?.id;
 }
 
+/// Fire-and-forget request to wake a sleeping backend.
+///
+/// The API host spins down when idle, so the first real request after a quiet
+/// period pays the full cold start. Calling this at launch moves that wait
+/// under the login/onboarding screens, where the user is busy anyway. Failure
+/// is not interesting — the real request will report its own.
+Future<void> warmUpBackend() async {
+  try {
+    await http
+        .get(Uri.parse('$baseUrl/test-db'))
+        .timeout(const Duration(seconds: 60));
+  } catch (_) {
+    // Deliberately silent: this is opportunistic, not a user-visible action.
+  }
+}
+
 Future<bool> testConnection() async {
   try {
     final response = await http.get(
@@ -21,7 +39,8 @@ Future<bool> testConnection() async {
       headers: getHeaders(),
     );
     return response.statusCode == 200;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'testConnection');
     return false;
   }
 }
@@ -69,7 +88,8 @@ Future<Map<String, dynamic>?> getDashboard() async {
       return jsonDecode(response.body);
     }
     return null;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getDashboard');
     return null;
   }
 }
@@ -87,7 +107,8 @@ Future<List<String>> getUserExercises() async {
       return (data['exercises'] as List).cast<String>();
     }
     return [];
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getUserExercises');
     return [];
   }
 }
@@ -105,7 +126,8 @@ Future<Map<String, dynamic>?> getExerciseStats(String exercise) async {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getExerciseStats');
     return null;
   }
 }
@@ -124,7 +146,8 @@ Future<Map<String, dynamic>?> getStreak() async {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getStreak');
     return null;
   }
 }
@@ -147,7 +170,8 @@ Future<Map<String, dynamic>?> logBodyweight(double weightKg) async {
       if (detail is String && detail.isNotEmpty) return {'error': detail};
     } catch (_) {}
     return {'error': 'Server error (${response.statusCode})'};
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'logBodyweight');
     return {'error': 'Network error'};
   }
 }
@@ -164,7 +188,8 @@ Future<Map<String, dynamic>?> getTodayBodyweight() async {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getTodayBodyweight');
     return null;
   }
 }
@@ -183,7 +208,8 @@ Future<List<Map<String, dynamic>>> getWeeklySummary({int weeks = 8}) async {
       return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
     }
     return [];
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getWeeklySummary');
     return [];
   }
 }
@@ -200,7 +226,8 @@ Future<Map<String, dynamic>?> getMuscleBalance() async {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getMuscleBalance');
     return null;
   }
 }
@@ -216,7 +243,8 @@ Future<Map<String, dynamic>?> scanFoodText(String description) async {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'scanFoodText');
     return null;
   }
 }
@@ -228,7 +256,8 @@ Future<bool> deleteWorkout(int workoutId) async {
       headers: getHeaders(),
     );
     return response.statusCode == 200;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'deleteWorkout');
     return false;
   }
 }
@@ -241,7 +270,8 @@ Future<bool> updateWorkout(int workoutId, Map<String, dynamic> fields) async {
       body: jsonEncode(fields),
     );
     return response.statusCode == 200;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'updateWorkout');
     return false;
   }
 }
@@ -258,7 +288,8 @@ Future<bool> savePhysiqueScan(Map<String, dynamic> scanData) async {
     if (response.statusCode != 200) return false;
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['saved'] == true;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'savePhysiqueScan');
     return false;
   }
 }
@@ -270,7 +301,8 @@ Future<bool> deletePhysiqueScan(String scanId) async {
       headers: getHeaders(),
     );
     return response.statusCode == 200;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'deletePhysiqueScan');
     return false;
   }
 }
@@ -288,7 +320,8 @@ Future<List<Map<String, dynamic>>> getBodyweightHistory() async {
       return (data['entries'] as List).cast<Map<String, dynamic>>();
     }
     return [];
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getBodyweightHistory');
     return [];
   }
 }
@@ -304,7 +337,8 @@ Future<Map<String, dynamic>?> deleteAccount() async {
     );
     if (response.statusCode != 200) return null;
     return jsonDecode(response.body) as Map<String, dynamic>;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'deleteAccount');
     return null;
   }
 }
@@ -321,7 +355,8 @@ Future<List<Map<String, dynamic>>> getPhysiqueScans() async {
         .eq('user_id', userId)
         .order('created_at', ascending: true);
     return (rows as List).cast<Map<String, dynamic>>();
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getPhysiqueScans');
     return [];
   }
 }
@@ -340,7 +375,8 @@ Future<List<Map<String, dynamic>>> getCalorieLogs() async {
         .eq('user_id', userId)
         .order('created_at', ascending: false);
     return (rows as List).cast<Map<String, dynamic>>();
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getCalorieLogs');
     return [];
   }
 }
@@ -355,7 +391,8 @@ Future<Map<String, dynamic>?> getUserProfile() async {
         .eq('id', userId)
         .maybeSingle();
     return row;
-  } catch (e) {
+  } catch (e, s) {
+    ErrorReporter.report(e, stack: s, context: 'getUserProfile');
     return null;
   }
 }

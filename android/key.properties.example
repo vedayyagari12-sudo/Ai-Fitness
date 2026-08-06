@@ -1,0 +1,17 @@
+# Copy to android/key.properties and fill in. That file is gitignored —
+# never commit it, and never commit the .jks itself.
+#
+# Create the upload keystore once:
+#
+#   keytool -genkey -v -keystore upload-keystore.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Then back up BOTH the .jks and these passwords somewhere you will still
+# have them in five years. Losing the upload key means you can no longer
+# publish updates to the existing Play listing.
+
+storePassword=<password you chose>
+keyPassword=<password you chose>
+keyAlias=upload
+# Absolute path, or relative to the android/app directory.
+storeFile=/absolute/path/to/upload-keystore.jks
