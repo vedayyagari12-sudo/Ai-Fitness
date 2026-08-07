@@ -80,7 +80,7 @@ class PermissionService {
           ),
         ),
         content: Text(
-          'FitAI needs camera and photo library access to scan meals and analyse your physique.\n\nPlease allow access when prompted.',
+          'Physiqo AI needs camera and photo library access to scan meals and analyse your physique.\n\nPlease allow access when prompted.',
           style: TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
         ),
         actions: [
@@ -111,7 +111,7 @@ class PermissionService {
           ),
         ),
         content: Text(
-          'Camera and photo access has been denied.\n\nTo use scanning features, please enable access in your device Settings → Apps → FitAI → Permissions.',
+          'Camera and photo access has been denied.\n\nTo use scanning features, please enable access in your device Settings → Apps → Physiqo AI → Permissions.',
           style: TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
         ),
         actions: [

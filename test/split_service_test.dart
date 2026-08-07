@@ -1,4 +1,4 @@
-import 'package:fitness_app/services/split_service.dart';
+import 'package:physiqo_ai/services/split_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The split drives what the AI programs each day, so its structure is a

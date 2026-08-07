@@ -1,4 +1,4 @@
-import 'package:fitness_app/services/today_cache.dart';
+import 'package:physiqo_ai/services/today_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// TodayCache is process-wide static state. It previously keyed only on the

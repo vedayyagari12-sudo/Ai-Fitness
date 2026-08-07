@@ -210,7 +210,7 @@ TextStyle get kBodySmall => GoogleFonts.inter(
 );
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// "The Outsiders" athlete-tracker design system for FitAI.
+/// "The Outsiders" athlete-tracker design system for Physiqo AI.
 /// Dark canvas, cool-blue accent, extreme weight contrast. The dark palette
 /// (`AppColors`) is the default; a light palette mirrors it for light mode.
 class AppColors {

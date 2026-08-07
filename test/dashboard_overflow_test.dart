@@ -1,9 +1,9 @@
-import 'package:fitness_app/models/readiness_data.dart';
-import 'package:fitness_app/widgets/physique_mini_card.dart';
-import 'package:fitness_app/widgets/readiness_card.dart';
-import 'package:fitness_app/widgets/today_session_card.dart';
-import 'package:fitness_app/widgets/trend_card.dart';
-import 'package:fitness_app/widgets/week_strip.dart';
+import 'package:physiqo_ai/models/readiness_data.dart';
+import 'package:physiqo_ai/widgets/physique_mini_card.dart';
+import 'package:physiqo_ai/widgets/readiness_card.dart';
+import 'package:physiqo_ai/widgets/today_session_card.dart';
+import 'package:physiqo_ai/widgets/trend_card.dart';
+import 'package:physiqo_ai/widgets/week_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

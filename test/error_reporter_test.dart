@@ -1,4 +1,4 @@
-import 'package:fitness_app/services/error_reporter.dart';
+import 'package:physiqo_ai/services/error_reporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The API layer returns null/empty on failure so screens can render an empty

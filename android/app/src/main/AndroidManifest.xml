@@ -22,7 +22,7 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
 
     <application
-        android:label="FitAI"
+        android:label="Physiqo AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true"

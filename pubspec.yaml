@@ -1,5 +1,5 @@
-name: fitness_app
-description: "A new Flutter project."
+name: physiqo_ai
+description: "Physiqo AI — AI-guided training, physique scanning and calorie tracking."
 publish_to: 'none'
 
 version: 1.0.0+1

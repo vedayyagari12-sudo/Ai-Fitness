@@ -1,5 +1,5 @@
-import 'package:fitness_app/screens/onboarding/onboarding_flow.dart';
-import 'package:fitness_app/theme/app_widgets.dart';
+import 'package:physiqo_ai/screens/onboarding/onboarding_flow.dart';
+import 'package:physiqo_ai/theme/app_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

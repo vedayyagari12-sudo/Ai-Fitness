@@ -97,7 +97,7 @@ class MyApp extends StatelessWidget {
             ? Brightness.light
             : Brightness.dark;
         return MaterialApp(
-          title: 'FitAI',
+          title: 'Physiqo AI',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: mode,

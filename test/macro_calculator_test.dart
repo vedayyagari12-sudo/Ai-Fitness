@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fitness_app/services/macro_calculator.dart';
+import 'package:physiqo_ai/services/macro_calculator.dart';
 
 void main() {
   const calc = MacroCalculator();

@@ -38,8 +38,8 @@ class ErrorReporter {
 
     // `log` rather than print: it survives release builds and shows up in
     // logcat with a searchable tag.
-    developer.log(line, name: 'fitai.error', error: error, stackTrace: stack);
-    if (kDebugMode) debugPrint('FitAI error $line');
+    developer.log(line, name: 'physiqo.error', error: error, stackTrace: stack);
+    if (kDebugMode) debugPrint('Physiqo AI error $line');
 
     // Guarded: a crash reporter that throws (offline, misconfigured DSN,
     // rate-limited) must not take down the code path that was merely trying
@@ -49,7 +49,7 @@ class ErrorReporter {
     } catch (reporterError) {
       developer.log(
         'error reporter itself failed: $reporterError',
-        name: 'fitai.error',
+        name: 'physiqo.error',
       );
     }
   }

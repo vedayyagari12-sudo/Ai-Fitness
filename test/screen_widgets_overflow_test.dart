@@ -1,5 +1,5 @@
-import 'package:fitness_app/screens/workouts/segmented_bar.dart';
-import 'package:fitness_app/widgets/recent_scan_thumb.dart';
+import 'package:physiqo_ai/screens/workouts/segmented_bar.dart';
+import 'package:physiqo_ai/widgets/recent_scan_thumb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

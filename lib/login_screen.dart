@@ -228,25 +228,30 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const SizedBox(height: 20),
 
-                    // FITAI wordmark
+                    // PHYSIQO AI wordmark. Scaled to fit: at 46pt this is more
+                    // than twice the width of the old "FITAI" and runs off a
+                    // narrow phone otherwise.
                     Center(
-                      child: RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontSize: 46,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -2,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              fontSize: 46,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -2,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: 'PHYSIQO',
+                                style: TextStyle(color: AppColors.textPrimary),
+                              ),
+                              TextSpan(
+                                text: ' AI',
+                                style: TextStyle(color: AppColors.accent),
+                              ),
+                            ],
                           ),
-                          children: [
-                            TextSpan(
-                              text: 'FIT',
-                              style: TextStyle(color: AppColors.textPrimary),
-                            ),
-                            TextSpan(
-                              text: 'AI',
-                              style: TextStyle(color: AppColors.accent),
-                            ),
-                          ],
                         ),
                       ),
                     ),
