@@ -13,7 +13,7 @@ import '../../theme/theme_controller.dart';
 import '../../utils/snackbar.dart';
 
 const _appVersion = '1.0.0';
-const _supportEmail = 'support@aifitness.app';
+const _supportEmail = 'physiqoapp@gmail.com';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -498,7 +498,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     '',
                     () => _openLegal(
                       'Privacy Policy',
-                      'assets/legal/privacy_policy.html',
+                      'docs/privacy_policy.html',
                     ),
                   ),
                   _detailRow(
@@ -506,7 +506,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     '',
                     () => _openLegal(
                       'Terms of Service',
-                      'assets/legal/terms_of_service.html',
+                      'docs/terms_of_service.html',
                     ),
                   ),
                   _detailRow('Contact Support', _supportEmail, () {

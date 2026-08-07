@@ -653,8 +653,8 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (_) => LegalViewerScreen(
             title: isPrivacy ? 'Privacy Policy' : 'Terms of Service',
             assetPath: isPrivacy
-                ? 'assets/legal/privacy_policy.html'
-                : 'assets/legal/terms_of_service.html',
+                ? 'docs/privacy_policy.html'
+                : 'docs/terms_of_service.html',
           ),
         ),
       ),
