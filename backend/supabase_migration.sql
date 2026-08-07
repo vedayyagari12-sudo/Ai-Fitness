@@ -78,5 +78,19 @@ ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS lats_score FLOAT;
 ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS mid_back_score FLOAT;
 ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS traps_score FLOAT;
 
+-- Account deletion removes rows from these tables using the user's own JWT,
+-- so each needs a DELETE policy. Without one Postgrest returns 204 having
+-- deleted nothing — the same silent failure that hid the bodyweight bug, but
+-- here it would leave a "deleted" account's data behind.
+DROP POLICY IF EXISTS "Users can delete own calorie logs" ON calorie_logs;
+CREATE POLICY "Users can delete own calorie logs"
+  ON calorie_logs FOR DELETE
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own physique scans" ON physique_scans;
+CREATE POLICY "Users can delete own physique scans"
+  ON physique_scans FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- If workouts table uses integer user_id, migrate to UUID:
 -- ALTER TABLE workouts ALTER COLUMN user_id TYPE TEXT USING user_id::TEXT;
