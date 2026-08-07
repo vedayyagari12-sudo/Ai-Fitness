@@ -1,4 +1,9 @@
--- Run in Supabase SQL editor
+-- Run in Supabase SQL editor.
+--
+-- Every statement here is idempotent, so the whole file can be re-run on an
+-- existing database. Postgres has no CREATE POLICY IF NOT EXISTS, hence the
+-- DROP POLICY IF EXISTS before each one — without that, re-running aborts on
+-- the first existing policy and any later statements never execute.
 
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id),
@@ -24,19 +29,23 @@ CREATE TABLE IF NOT EXISTS bodyweight_logs (
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bodyweight_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON user_profiles;
 CREATE POLICY "Users can read own profile"
   ON user_profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can upsert own profile" ON user_profiles;
 CREATE POLICY "Users can upsert own profile"
   ON user_profiles FOR ALL
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can read own bodyweight logs" ON bodyweight_logs;
 CREATE POLICY "Users can read own bodyweight logs"
   ON bodyweight_logs FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own bodyweight logs" ON bodyweight_logs;
 CREATE POLICY "Users can insert own bodyweight logs"
   ON bodyweight_logs FOR INSERT
   WITH CHECK (auth.uid() = user_id);
@@ -46,11 +55,13 @@ CREATE POLICY "Users can insert own bodyweight logs"
 -- correction after it was silently dropped by RLS (Postgrest reports a
 -- policy-filtered UPDATE as 200 with an empty body, not as an error).
 -- Safe to run on an existing database.
+DROP POLICY IF EXISTS "Users can update own bodyweight logs" ON bodyweight_logs;
 CREATE POLICY "Users can update own bodyweight logs"
   ON bodyweight_logs FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own bodyweight logs" ON bodyweight_logs;
 CREATE POLICY "Users can delete own bodyweight logs"
   ON bodyweight_logs FOR DELETE
   USING (auth.uid() = user_id);
