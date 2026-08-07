@@ -46,7 +46,7 @@ app.*.map.json
 .env
 __pycache__
 
-# Upload signing key ��� committing either of these hands over the ability to
+# Upload signing key ��������� committing either of these hands over the ability to
 # publish updates to the Play listing.
 android/key.properties
 **/*.jks
