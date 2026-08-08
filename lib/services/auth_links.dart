@@ -1,18 +1,28 @@
-/// Deep link Supabase sends users back to after they confirm their email.
+/// Where Supabase sends users after they confirm their email.
 ///
-/// It must match three places or verification silently falls back to opening
-/// a browser:
-///   1. the Android intent filter in AndroidManifest.xml
-///   2. CFBundleURLSchemes in ios/Runner/Info.plist
-///   3. Supabase dashboard → Authentication → URL Configuration →
-///      Redirect URLs (Supabase refuses to redirect anywhere unlisted)
+/// This is an https page, not the app's own scheme, because the link is
+/// opened by a mail client — and webmail (Gmail in a browser, most notably)
+/// cannot open a custom scheme at all. Pointing the email straight at
+/// physiqoai:// works when a native mail app handles it and silently does
+/// nothing everywhere else.
 ///
-/// supabase_flutter picks the link up on its own — it listens for incoming
-/// links and exchanges the tokens on them for a session — so nothing has to
-/// parse this by hand. It only needs passing to the calls that send an email.
-const String kEmailRedirectUrl = 'physiqoai://verified';
+/// So the email goes to a page we host, and that page immediately forwards
+/// to [kAppLinkUrl], carrying the auth parameters with it. If the app is
+/// installed the hand-off is invisible; if it is not, the page stays put and
+/// explains what to do. See docs/verified.html.
+///
+/// Must be listed in Supabase → Authentication → URL Configuration →
+/// Redirect URLs, or Supabase refuses to redirect here.
+const String kEmailRedirectUrl =
+    'https://vedayyagari12-sudo.github.io/Ai-Fitness/verified.html';
 
-/// Scheme and host of [kEmailRedirectUrl], for matching incoming links.
+/// The app's own link, triggered by that page rather than by the email.
+///
+/// Must match the Android intent filter in AndroidManifest.xml and
+/// CFBundleURLSchemes in ios/Runner/Info.plist.
+const String kAppLinkUrl = 'physiqoai://verified';
+
+/// Scheme and host of [kAppLinkUrl], for matching incoming links.
 const String kAuthLinkScheme = 'physiqoai';
 const String kAuthLinkHost = 'verified';
 

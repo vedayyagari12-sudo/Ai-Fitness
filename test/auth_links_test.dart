@@ -7,13 +7,48 @@ import 'package:physiqo_ai/services/auth_links.dart';
 /// scheme and Supabase's allow-list. If any drifts, verification silently
 /// falls back to opening a browser — which looks like nothing happening.
 void main() {
-  test('the redirect URL matches the scheme and host we register', () {
+  test('the email redirect is an https page, not the app scheme', () {
+    // Mail clients open this, and webmail cannot follow a custom scheme —
+    // pointing the email straight at physiqoai:// silently does nothing for
+    // anyone reading mail in a browser.
     final uri = Uri.parse(kEmailRedirectUrl);
+    expect(uri.scheme, 'https');
+    expect(uri.path, endsWith('verified.html'));
+  });
+
+  test('the app link matches the scheme and host we register', () {
+    final uri = Uri.parse(kAppLinkUrl);
     expect(uri.scheme, kAuthLinkScheme);
     expect(uri.host, kAuthLinkHost);
-    // Pinned literally: these three values are duplicated in
-    // AndroidManifest.xml and Info.plist, which no test can read.
-    expect(kEmailRedirectUrl, 'physiqoai://verified');
+    // Pinned literally: duplicated in AndroidManifest.xml, Info.plist and
+    // docs/verified.html, none of which share this constant.
+    expect(kAppLinkUrl, 'physiqoai://verified');
+  });
+
+  test('the fallback page forwards auth parameters to the app', () {
+    // Supabase appends ?code= (PKCE) or #access_token= (implicit). Dropping
+    // them opens the app with nothing to exchange, so no session appears and
+    // the link looks broken.
+    final page = File('docs/verified.html').readAsStringSync();
+    expect(page, contains('physiqoai://verified'));
+    expect(
+      page,
+      contains('window.location.search'),
+      reason: 'the PKCE code would be dropped',
+    );
+    expect(
+      page,
+      contains('window.location.hash'),
+      reason: 'implicit-flow tokens would be dropped',
+    );
+    expect(page, contains('Email Verified!'));
+  });
+
+  test('the fallback page is reachable at the redirect URL', () {
+    // The constant and the hosted filename must agree or Supabase redirects
+    // to a 404.
+    expect(File('docs/verified.html').existsSync(), isTrue);
+    expect(kEmailRedirectUrl, endsWith('/verified.html'));
   });
 
   group('the platform config agrees with the Dart constant', () {
@@ -48,8 +83,16 @@ void main() {
   });
 
   group('recognising our link', () {
-    test('accepts the redirect, with or without tokens attached', () {
-      expect(isEmailVerificationLink(Uri.parse(kEmailRedirectUrl)), isTrue);
+    test('accepts the app link, with or without tokens attached', () {
+      // The app only ever sees kAppLinkUrl — the https redirect is opened by
+      // the browser, which then hands off to this.
+      expect(isEmailVerificationLink(Uri.parse(kAppLinkUrl)), isTrue);
+      expect(
+        isEmailVerificationLink(
+          Uri.parse('physiqoai://verified?code=pkce-auth-code'),
+        ),
+        isTrue,
+      );
       expect(
         isEmailVerificationLink(
           Uri.parse('physiqoai://verified#access_token=abc&type=signup'),
