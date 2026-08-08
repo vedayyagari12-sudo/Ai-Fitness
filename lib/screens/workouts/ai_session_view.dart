@@ -199,16 +199,13 @@ class _AiSessionViewState extends State<AiSessionView> {
       _lagging = weak.take(2).map((e) => e.key).toSet();
       return;
     }
-    // No scan yet — fall back to the two least-trained groups by volume.
-    final muscle = await getMuscleBalance();
-    final groups = muscle?['groups'] as Map<String, dynamic>? ?? {};
-    if (groups.isEmpty) return;
-    final entries =
-        groups.entries
-            .map((e) => MapEntry(e.key, (e.value as num).toDouble()))
-            .toList()
-          ..sort((a, b) => a.value.compareTo(b.value));
-    _lagging = entries.take(2).map((e) => e.key.toLowerCase()).toSet();
+    // No scan: nothing is marked FOCUS. This used to fall back to the two
+    // least-trained muscle groups by volume, which tagged exercises FOCUS for
+    // people who had never scanned — and "least trained in the last 30 days"
+    // is not evidence a muscle is underdeveloped. With no logged workouts it
+    // picked two groups at random. The session is still generated; it just
+    // doesn't claim to know what's weak until a scan says so.
+    _lagging = {};
   }
 
   Future<void> _generate() async {

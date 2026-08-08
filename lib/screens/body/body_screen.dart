@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../api_service.dart';
 import '../../services/nav_service.dart';
 import '../../utils/chart_labels.dart';
+import '../../utils/muscle_focus.dart';
 import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
@@ -127,6 +128,9 @@ class _BodyScreenState extends State<BodyScreen> {
       final maxV = groups.values
           .map((v) => (v as num).toDouble())
           .fold(0.0, (a, b) => a > b ? a : b);
+      // Nothing trained yet: every share would be 0, which says nothing about
+      // any muscle. Show the empty state rather than a row of zeroed bars.
+      if (maxV <= 0) return const [];
       list = [
         for (final e in groups.entries)
           _MuscleScore(
@@ -138,18 +142,18 @@ class _BodyScreenState extends State<BodyScreen> {
     }
     if (list.isEmpty) return list;
     list.sort((a, b) => b.score.compareTo(a.score));
-    // A muscle is only a FOCUS area when it's genuinely weak (score < 7).
-    // Being someone's relatively-lowest muscle at 8/10 is a strength to
-    // maintain, not a lag — cap at the two weakest so plans stay focused.
-    var flagged = 0;
-    for (var i = list.length - 1; i >= 0 && flagged < 2; i--) {
-      if (list[i].score < 7) {
-        list[i].lag = true;
-        flagged++;
-      } else if (i >= list.length - 2 && list.length > 2) {
-        // Relatively-lowest but objectively strong — maintain, don't "fix".
-        list[i].maintain = true;
-      }
+
+    // Scan-only by design — see focusFlags for why the volume fallback must
+    // not feed this.
+    final flags = focusFlags(
+      scoresHighToLow: [for (final m in list) m.score],
+      fromScan: _hasScanScores,
+    );
+    for (final i in flags.lagging) {
+      list[i].lag = true;
+    }
+    for (final i in flags.maintain) {
+      list[i].maintain = true;
     }
     return list;
   }
