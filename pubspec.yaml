@@ -12,6 +12,9 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.2.0
+  # Already pulled in by supabase_flutter; declared directly so the app can
+  # tell a deep-link sign-in apart from a password sign-in.
+  app_links: ^7.0.0
   supabase_flutter: ^2.3.0
   image_picker: ^1.2.2
   shared_preferences: ^2.5.3

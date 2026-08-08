@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/profile/profile_screen.dart' show LegalViewerScreen;
+import 'services/auth_links.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_widgets.dart';
 
@@ -161,6 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final res = await Supabase.instance.client.auth.signUp(
         email: email,
         password: passwordController.text.trim(),
+        // Without this the confirmation link points at Supabase's default
+        // redirect and opens a browser instead of the app.
+        emailRedirectTo: kEmailRedirectUrl,
       );
 
       // Signing up with an address that already exists does NOT raise. To
@@ -229,6 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await Supabase.instance.client.auth.resend(
         type: OtpType.signup,
         email: email,
+        emailRedirectTo: kEmailRedirectUrl,
       );
       setState(() {
         message = 'Verification email sent — check your inbox.';

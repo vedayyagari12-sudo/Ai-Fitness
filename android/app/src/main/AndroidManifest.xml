@@ -45,6 +45,21 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Supabase auth redirect. The verification email points at
+                 physiqoai://verified, so tapping it hands the link to this
+                 activity instead of a browser, and supabase_flutter turns
+                 the tokens on it into a session.
+
+                 launchMode is singleTop above, so an already-running app
+                 receives this through onNewIntent rather than starting a
+                 second copy of itself. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="physiqoai" android:host="verified"/>
+            </intent-filter>
         </activity>
 
         <!-- FileProvider — required for camera capture on Android 7.0+ -->

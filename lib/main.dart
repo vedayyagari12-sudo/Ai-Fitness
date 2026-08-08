@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
@@ -10,6 +11,7 @@ import 'screens/onboarding/onboarding_flow.dart';
 import 'screens/body/body_screen.dart';
 import 'screens/scan/scan_tab_screen.dart';
 import 'services/app_state_service.dart';
+import 'services/auth_links.dart';
 import 'services/error_reporter.dart';
 import 'services/nav_service.dart';
 import 'services/today_cache.dart';
@@ -57,10 +59,80 @@ void main() {
       // request otherwise lands as a ~50s wait on a spinner.
       unawaited(warmUpBackend());
 
+      _watchVerificationLinks();
+
       runApp(const MyApp());
     },
     (error, stack) =>
         ErrorReporter.report(error, stack: stack, context: 'uncaught'),
+  );
+}
+
+/// App-level messenger, so a snackbar raised while the auth state is
+/// changing survives the route swap that follows it. A screen-level
+/// ScaffoldMessenger would be torn down mid-animation and show nothing.
+final GlobalKey<ScaffoldMessengerState> appMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
+/// Reports the outcome of tapping a verification link.
+///
+/// supabase_flutter already consumes the link and turns its tokens into a
+/// session, and AppBootstrap routes onward the moment that lands — so the
+/// user is signed in without doing anything. What it does not do is say why
+/// the app suddenly opened logged in, or explain a link that carried an
+/// error instead of tokens. That is all this adds.
+void _watchVerificationLinks() {
+  final links = AppLinks();
+
+  void handle(Uri uri) {
+    if (!isEmailVerificationLink(uri)) return;
+
+    final error = verificationLinkError(uri);
+    // The session arrives asynchronously, so give Supabase a moment to
+    // process the same link before deciding what to tell the user.
+    Future.delayed(const Duration(milliseconds: 600), () {
+      final signedIn = Supabase.instance.client.auth.currentSession != null;
+      final messenger = appMessengerKey.currentState;
+      if (messenger == null) return;
+
+      final String text;
+      if (error != null) {
+        text = error;
+      } else if (signedIn) {
+        text = 'Email verified — you\'re signed in.';
+      } else {
+        // Link looked valid but produced no session: usually already used.
+        text = 'Email verified. Please log in to continue.';
+      }
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(text),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+    });
+  }
+
+  // Cold start: the link that launched the app.
+  unawaited(
+    links
+        .getInitialLink()
+        .then((uri) {
+          if (uri != null) handle(uri);
+        })
+        .catchError((Object e, StackTrace s) {
+          ErrorReporter.report(e, stack: s, context: 'initialAuthLink');
+        }),
+  );
+
+  // Warm start: the app was already running and got the link via onNewIntent.
+  links.uriLinkStream.listen(
+    handle,
+    onError: (Object e, StackTrace s) =>
+        ErrorReporter.report(e, stack: s, context: 'authLinkStream'),
   );
 }
 
@@ -98,6 +170,7 @@ class MyApp extends StatelessWidget {
             : Brightness.dark;
         return MaterialApp(
           title: 'Physiqo AI',
+          scaffoldMessengerKey: appMessengerKey,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: mode,
