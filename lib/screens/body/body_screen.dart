@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../api_service.dart';
 import '../../services/nav_service.dart';
+import '../../utils/chart_labels.dart';
 import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
@@ -1114,7 +1115,7 @@ class _BodyScreenState extends State<BodyScreen> {
           '${change <= 0 ? '' : '+'}${change.toStringAsFixed(1)}% since your '
           'first scan${change <= 0 ? ' — moving the right way' : ''}',
       takeawayColor: change <= 0 ? kGreen : kPink,
-      chart: _metricLine(series, kPink, '%'),
+      chart: _metricLine(series, kPink),
     );
   }
 
@@ -1145,7 +1146,6 @@ class _BodyScreenState extends State<BodyScreen> {
       chart: _metricLine(
         series,
         change.abs() < 0.05 ? kCyan : (matchesGoal ? kGreen : kPink),
-        ' lbs',
       ),
     );
   }
@@ -1162,57 +1162,68 @@ class _BodyScreenState extends State<BodyScreen> {
     );
   }
 
-  Widget _metricLine(List<(String, double)> series, Color color, String unit) {
+  Widget _metricLine(List<(String, double)> series, Color color) {
     final values = series.map((e) => e.$2).toList();
     final minY = values.reduce((a, b) => a < b ? a : b);
     final maxY = values.reduce((a, b) => a > b ? a : b);
     final pad = (maxY - minY) * 0.25 + 0.3;
+    // No unit on the point labels — the headline above the chart already
+    // says what the number is, and "162.0lbs" is wide enough that the suffix
+    // alone forces labels to be dropped.
+    final labelStyle = TextStyle(
+      color: color,
+      fontSize: 14,
+      fontWeight: FontWeight.w800,
+    );
+    final labels = [for (final v in values) v.toStringAsFixed(1)];
 
-    return LineChart(
-      LineChartData(
-        minY: minY - pad,
-        maxY: maxY + pad,
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: ((maxY - minY) / 3 + 0.001),
-          getDrawingHorizontalLine: (v) =>
-              FlLine(color: kGridline, strokeWidth: 1),
-        ),
-        titlesData: const FlTitlesData(show: false),
-        borderData: FlBorderData(show: false),
-        // Values stay on the chart — no tap-and-hold needed.
-        lineTouchData: LineTouchData(
-          enabled: false,
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => Colors.transparent,
-            tooltipPadding: EdgeInsets.zero,
-            tooltipMargin: 4,
-            getTooltipItems: (spots) => [
-              for (final s in spots)
-                LineTooltipItem(
-                  '${s.y.toStringAsFixed(1)}$unit',
-                  TextStyle(
-                    color: color,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        showingTooltipIndicators: [
-          for (final i in _labelIndices(values.length))
-            ShowingTooltipIndicators([
-              LineBarSpot(
-                _metricBar(values, color),
-                0,
-                FlSpot(i.toDouble(), values[i]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final labelled = fittingLabelIndices(
+          labels: labels,
+          style: labelStyle,
+          pointSpacing: linePointSpacing(constraints.maxWidth, values.length),
+        );
+        return LineChart(
+          LineChartData(
+            minY: minY - pad,
+            maxY: maxY + pad,
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              horizontalInterval: ((maxY - minY) / 3 + 0.001),
+              getDrawingHorizontalLine: (v) =>
+                  FlLine(color: kGridline, strokeWidth: 1),
+            ),
+            titlesData: const FlTitlesData(show: false),
+            borderData: FlBorderData(show: false),
+            // Values stay on the chart — no tap-and-hold needed.
+            lineTouchData: LineTouchData(
+              enabled: false,
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipColor: (_) => Colors.transparent,
+                tooltipPadding: EdgeInsets.zero,
+                tooltipMargin: 4,
+                getTooltipItems: (spots) => [
+                  for (final s in spots)
+                    LineTooltipItem(s.y.toStringAsFixed(1), labelStyle),
+                ],
               ),
-            ]),
-        ],
-        lineBarsData: [_metricBar(values, color)],
-      ),
+            ),
+            showingTooltipIndicators: [
+              for (final i in labelled)
+                ShowingTooltipIndicators([
+                  LineBarSpot(
+                    _metricBar(values, color),
+                    0,
+                    FlSpot(i.toDouble(), values[i]),
+                  ),
+                ]),
+            ],
+            lineBarsData: [_metricBar(values, color)],
+          ),
+        );
+      },
     );
   }
 
@@ -1237,74 +1248,76 @@ class _BodyScreenState extends State<BodyScreen> {
     );
   }
 
-  /// Which points get a permanent value label — all of them when the series
-  /// is short, otherwise a readable subset that always includes the latest.
-  List<int> _labelIndices(int count) {
-    if (count <= 0) return const [];
-    if (count <= 6) return [for (var i = 0; i < count; i++) i];
-    const wanted = 5;
-    final step = (count - 1) / (wanted - 1);
-    final set = <int>{};
-    for (var k = 0; k < wanted; k++) {
-      set.add((k * step).round().clamp(0, count - 1));
-    }
-    set.add(count - 1);
-    final list = set.toList()..sort();
-    return list;
-  }
-
   /// Physique score as bars — one per scan, latest highlighted.
   Widget _scoreBars(List<(String, double)> series) {
     final maxVal = series.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
     // Bars thin out as the series grows so they always sit inside their own
     // slot with a gap, instead of merging into a solid block.
     final barWidth = (240 / series.length * 0.55).clamp(4.0, 14.0);
-    return BarChart(
-      BarChartData(
-        // Headroom for the always-on value labels.
-        maxY: (maxVal * 1.35).clamp(10, 130).toDouble(),
-        minY: 0,
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-        barTouchData: BarTouchData(
-          enabled: false,
-          touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => Colors.transparent,
-            tooltipPadding: EdgeInsets.zero,
-            tooltipMargin: 2,
-            getTooltipItem: (group, _, rod, _) => BarTooltipItem(
-              '${rod.toY.round()}',
-              TextStyle(
-                color: group.x == series.length - 1
-                    ? kLime
-                    : AppColors.textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
+    final labelStyle = TextStyle(
+      color: AppColors.textSecondary,
+      fontSize: 14,
+      fontWeight: FontWeight.w800,
+    );
+    final labels = [for (final e in series) '${e.$2.round()}'];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Bars carry a label each; past a certain density they cannot all
+        // fit, so only the ones that clear their neighbours are shown.
+        final labelled = fittingLabelIndices(
+          labels: labels,
+          style: labelStyle,
+          pointSpacing: barPointSpacing(constraints.maxWidth, series.length),
+        ).toSet();
+        return BarChart(
+          BarChartData(
+            // Headroom for the always-on value labels.
+            maxY: (maxVal * 1.35).clamp(10, 130).toDouble(),
+            minY: 0,
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(show: false),
+            barTouchData: BarTouchData(
+              enabled: false,
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (_) => Colors.transparent,
+                tooltipPadding: EdgeInsets.zero,
+                tooltipMargin: 2,
+                getTooltipItem: (group, _, rod, _) => BarTooltipItem(
+                  '${rod.toY.round()}',
+                  labelStyle.copyWith(
+                    color: group.x == series.length - 1
+                        ? kLime
+                        : AppColors.textSecondary,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        titlesData: const FlTitlesData(show: false),
-        barGroups: [
-          for (var i = 0; i < series.length; i++)
-            BarChartGroupData(
-              x: i,
-              showingTooltipIndicators: const [0],
-              barRods: [
-                BarChartRodData(
-                  toY: series[i].$2,
-                  width: barWidth,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(4),
-                  ),
-                  color: i == series.length - 1
-                      ? kLime
-                      : kLime.withValues(alpha: 0.4),
+            titlesData: const FlTitlesData(show: false),
+            barGroups: [
+              for (var i = 0; i < series.length; i++)
+                BarChartGroupData(
+                  x: i,
+                  showingTooltipIndicators: labelled.contains(i)
+                      ? const [0]
+                      : const [],
+                  barRods: [
+                    BarChartRodData(
+                      toY: series[i].$2,
+                      width: barWidth,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(4),
+                      ),
+                      color: i == series.length - 1
+                          ? kLime
+                          : kLime.withValues(alpha: 0.4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 

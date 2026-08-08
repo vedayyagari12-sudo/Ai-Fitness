@@ -272,6 +272,55 @@ void main() {
     expect(find.textContaining('two entries'), findsNothing);
   });
 
+  // A long history is the case that made value labels collide on the BODY
+  // tab. Render every tab with a dense series to confirm the card still
+  // builds and lays out.
+  testWidgets('trend card handles a long history on every tab', (tester) async {
+    tester.view.physicalSize = narrow;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TrendCard(
+              goal: 'cut',
+              // 90 daily weigh-ins, 5 significant digits each.
+              weightLbs: [for (var i = 0; i < 90; i++) 180.0 + (i % 11) * 0.4],
+              dailyCalories: const [3480, 0, 4120, 3990, 2870, 4310, 3760],
+              dayLabels: const [
+                'Mon',
+                'Tue',
+                'Wed',
+                'Thu',
+                'Fri',
+                'Sat',
+                'Sun',
+              ],
+              calorieTarget: 3200,
+              weeklyVolume: [for (var i = 0; i < 26; i++) 80000.0 + i * 2000],
+              weeklyStrength: [for (var i = 0; i < 26; i++) 300.0 + i * 3],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    for (final tab in ['WEIGHT', 'VOLUME', 'STRENGTH', 'CALORIES']) {
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '$tab tab failed with a long series',
+      );
+    }
+  });
+
   // Each trend tab renders a different chart+header combination.
   testWidgets('every TrendCard tab does not overflow at 320dp', (tester) async {
     tester.view.physicalSize = narrow;

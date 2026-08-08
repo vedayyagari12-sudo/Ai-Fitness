@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import '../utils/chart_labels.dart';
 import '../utils/units.dart';
 
 /// Dashboard trends card — four tabs, each with a headline number, a chart
@@ -154,6 +155,13 @@ class _TrendCardState extends State<TrendCard> {
     );
   }
 
+  /// Charts need their real width to decide how many value labels fit, and
+  /// only the layout knows it.
+  Widget _chart(Widget Function(double width) build) => SizedBox(
+    height: _chartHeight,
+    child: LayoutBuilder(builder: (_, c) => build(c.maxWidth)),
+  );
+
   Widget _empty(String hint) {
     return SizedBox(
       // Roughly the height of a populated view, so switching tabs doesn't
@@ -258,7 +266,7 @@ class _TrendCardState extends State<TrendCard> {
           style: TextStyle(fontSize: 13, color: kTextMuted),
         ),
         const SizedBox(height: 14),
-        SizedBox(height: _chartHeight, child: BarChart(_calorieBars())),
+        _chart((w) => BarChart(_calorieBars(w))),
         const SizedBox(height: 8),
         // Scale the legend down instead of overflowing on narrow phones.
         FittedBox(
@@ -289,9 +297,14 @@ class _TrendCardState extends State<TrendCard> {
     return kPink;
   }
 
-  BarChartData _calorieBars() {
+  BarChartData _calorieBars(double width) {
     final cals = widget.dailyCalories;
     final target = widget.calorieTarget;
+    final labelled = fittingLabelIndices(
+      labels: [for (final c in cals) c > 0 ? _compact(c) : '—'],
+      style: _valueLabelStyle,
+      pointSpacing: barPointSpacing(width, cals.length),
+    ).toSet();
     final maxVal = [target * 1.25, ...cals].reduce((a, b) => a > b ? a : b);
 
     return BarChartData(
@@ -361,7 +374,9 @@ class _TrendCardState extends State<TrendCard> {
         for (var i = 0; i < cals.length; i++)
           BarChartGroupData(
             x: i,
-            showingTooltipIndicators: const [0], // always-on value label
+            showingTooltipIndicators: labelled.contains(i)
+                ? const [0]
+                : const [],
             barRods: [
               BarChartRodData(
                 // A visible grey stub marks "not logged" so it reads
@@ -483,16 +498,18 @@ class _TrendCardState extends State<TrendCard> {
           ),
         ),
         const SizedBox(height: 14),
-        SizedBox(
-          height: _chartHeight,
-          child: LineChart(_weightLine(trendColor)),
-        ),
+        _chart((w) => LineChart(_weightLine(trendColor, w))),
       ],
     );
   }
 
-  LineChartData _weightLine(Color color) {
+  LineChartData _weightLine(Color color, double width) {
     final w = widget.weightLbs;
+    final labelled = fittingLabelIndices(
+      labels: [for (final v in w) lbsLabel(v)],
+      style: _valueLabelStyle,
+      pointSpacing: linePointSpacing(width, w.length),
+    );
     final minY = w.reduce((a, b) => a < b ? a : b);
     final maxY = w.reduce((a, b) => a > b ? a : b);
     final pad = (maxY - minY) * 0.25 + 0.5;
@@ -526,7 +543,7 @@ class _TrendCardState extends State<TrendCard> {
         ),
       ),
       showingTooltipIndicators: [
-        for (final i in _labelIndices(w.length))
+        for (final i in labelled)
           ShowingTooltipIndicators([
             LineBarSpot(_weightBar(w, color), 0, FlSpot(i.toDouble(), w[i])),
           ]),
@@ -552,23 +569,6 @@ class _TrendCardState extends State<TrendCard> {
         ),
       ),
     );
-  }
-
-  /// Which points get a permanent label. Labels every point when there are
-  /// few, otherwise thins them out (always keeping the latest) so a long
-  /// series stays readable instead of turning into a wall of numbers.
-  List<int> _labelIndices(int count) {
-    if (count <= 0) return const [];
-    if (count <= 6) return [for (var i = 0; i < count; i++) i];
-    const wanted = 5;
-    final step = (count - 1) / (wanted - 1);
-    final set = <int>{};
-    for (var k = 0; k < wanted; k++) {
-      set.add((k * step).round().clamp(0, count - 1));
-    }
-    set.add(count - 1); // always label the most recent value
-    final list = set.toList()..sort();
-    return list;
   }
 
   // ── VOLUME ──────────────────────────────────────────────────────────────
@@ -633,13 +633,18 @@ class _TrendCardState extends State<TrendCard> {
           ],
         ),
         const SizedBox(height: 14),
-        SizedBox(height: _chartHeight, child: BarChart(_volumeBars())),
+        _chart((w) => BarChart(_volumeBars(w))),
       ],
     );
   }
 
-  BarChartData _volumeBars() {
+  BarChartData _volumeBars(double width) {
     final vols = widget.weeklyVolume;
+    final labelled = fittingLabelIndices(
+      labels: [for (final v in vols) v > 0 ? _compact(v) : '—'],
+      style: _valueLabelStyle,
+      pointSpacing: barPointSpacing(width, vols.length),
+    ).toSet();
     final maxVal = vols.reduce((a, b) => a > b ? a : b);
 
     return BarChartData(
@@ -695,7 +700,9 @@ class _TrendCardState extends State<TrendCard> {
         for (var i = 0; i < vols.length; i++)
           BarChartGroupData(
             x: i,
-            showingTooltipIndicators: const [0],
+            showingTooltipIndicators: labelled.contains(i)
+                ? const [0]
+                : const [],
             barRods: [
               BarChartRodData(
                 toY: vols[i] > 0 ? vols[i] : maxVal * 0.03,
@@ -794,13 +801,18 @@ class _TrendCardState extends State<TrendCard> {
           ],
         ),
         const SizedBox(height: 14),
-        SizedBox(height: _chartHeight, child: BarChart(_strengthBars())),
+        _chart((w) => BarChart(_strengthBars(w))),
       ],
     );
   }
 
-  BarChartData _strengthBars() {
+  BarChartData _strengthBars(double width) {
     final str = widget.weeklyStrength;
+    final labelled = fittingLabelIndices(
+      labels: [for (final v in str) v > 0 ? _compact(v) : '—'],
+      style: _valueLabelStyle,
+      pointSpacing: barPointSpacing(width, str.length),
+    ).toSet();
     final maxVal = str.reduce((a, b) => a > b ? a : b);
 
     return BarChartData(
@@ -854,7 +866,9 @@ class _TrendCardState extends State<TrendCard> {
         for (var i = 0; i < str.length; i++)
           BarChartGroupData(
             x: i,
-            showingTooltipIndicators: const [0],
+            showingTooltipIndicators: labelled.contains(i)
+                ? const [0]
+                : const [],
             barRods: [
               BarChartRodData(
                 toY: str[i] > 0 ? str[i] : maxVal * 0.03,
