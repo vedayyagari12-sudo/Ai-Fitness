@@ -55,4 +55,26 @@ void main() {
     final html = await rootBundle.loadString('docs/privacy_policy.html');
     expect(html, contains('delete-account.html'));
   });
+
+  test('the contact address is never reachable only through mailto:', () async {
+    // mailto: does nothing for anyone without a mail client configured,
+    // which is most people on webmail. Every page must also render the
+    // address as plain, selectable text.
+    for (final path in pages.keys) {
+      final html = await rootBundle.loadString(path);
+      expect(
+        html,
+        contains('<span class="selectable">physiqoapp@gmail.com</span>'),
+        reason: '$path only offers the address behind a mailto: link',
+      );
+    }
+  });
+
+  test(
+    'the deletion page explains what to do if the button does nothing',
+    () async {
+      final html = await rootBundle.loadString('docs/delete-account.html');
+      expect(html, contains('email us directly at'));
+    },
+  );
 }

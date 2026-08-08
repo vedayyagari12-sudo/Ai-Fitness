@@ -23,6 +23,11 @@
     .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #8e8e93; }
     .btn { display: inline-block; background: #007aff; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 13px 22px; border-radius: 10px; margin-top: 18px; }
     .note { border-left: 3px solid #007aff; padding-left: 14px; margin-top: 12px; color: #c7c7cc; }
+    /* mailto: silently does nothing for anyone without a mail client set up,
+       which is most people on webmail — so the address is always present as
+       plain text too, never only behind the button. */
+    .fallback { font-size: 14px; color: #8e8e93; margin: 14px 0 0; }
+    .selectable { user-select: all; -webkit-user-select: all; display: inline-block; background: #0a0a0a; border: 1px solid #2c2c2e; border-radius: 6px; padding: 3px 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; color: #ffffff; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -53,6 +58,11 @@
     <li>That is all we need — no other information is required.</li>
   </ol>
   <a class="btn" href="mailto:physiqoapp@gmail.com?subject=Account%20Deletion%20Request">Open email app</a>
+  <p class="fallback">
+    The button needs an email app set up on your device. If nothing happens,
+    or you use webmail such as Gmail in a browser, email us directly at:
+    <span class="selectable">physiqoapp@gmail.com</span>
+  </p>
 </div>
 
 <p class="note">Please send the request from the address on your account. If you email us from a different address we cannot confirm the account is yours, and we will have to ask you to resend.</p>
@@ -89,7 +99,7 @@
 
 <h2>Questions</h2>
 <div class="contact-box">
-  <p style="margin:0;">If you have any question about deletion or your data, contact us at <a href="mailto:physiqoapp@gmail.com">physiqoapp@gmail.com</a>.</p>
+  <p style="margin:0;">If you have any question about deletion or your data, contact us at <span class="selectable">physiqoapp@gmail.com</span></p>
 </div>
 
 </body>

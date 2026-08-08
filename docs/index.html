@@ -14,6 +14,7 @@
     .card strong { color: #ffffff; font-size: 16px; display: block; margin-bottom: 3px; }
     .card span { color: #8e8e93; font-size: 14px; }
     .contact-box { background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 12px; padding: 16px 20px; margin-top: 24px; }
+    .selectable { user-select: all; -webkit-user-select: all; display: inline-block; background: #0a0a0a; border: 1px solid #2c2c2e; border-radius: 6px; padding: 3px 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; color: #ffffff; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -37,7 +38,7 @@
 </a>
 
 <div class="contact-box">
-  <p style="margin:0;">Support: <a href="mailto:physiqoapp@gmail.com">physiqoapp@gmail.com</a></p>
+  <p style="margin:0;">Support: <span class="selectable">physiqoapp@gmail.com</span></p>
 </div>
 
 </body>
