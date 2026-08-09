@@ -419,40 +419,38 @@ class _TrendCardState extends State<TrendCard> {
         'to start your trend',
       );
     }
-    // One weigh-in is a real answer, not a failure: show it rather than
-    // repeating the same "log it twice" nag every time they open the tab.
+    // One weigh-in is real data, not a failure. Draw the chart anyway so the
+    // single dot confirms the log saved, and say what turns it into a trend —
+    // a lone point with no line reads as a broken chart otherwise.
     if (w.length < 2) {
-      return SizedBox(
-        height: 215,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '${lbsLabel(w.first)} lbs',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    color: kTextPrimary,
-                    height: 1.0,
-                  ),
-                ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${lbsLabel(w.first)} lbs',
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+                color: kTextPrimary,
+                height: 1.0,
               ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'First weigh-in recorded. Log again on another day and '
-                  'your trend line appears here.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: kTextMuted),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 4),
+          Text(
+            'First weigh-in recorded',
+            style: TextStyle(fontSize: 13, color: kTextMuted),
+          ),
+          const SizedBox(height: 14),
+          _chart((width) => LineChart(_weightLine(kCyan, width))),
+          const ChartHint(
+            'Log your weight daily to start building your trend — check back '
+            'tomorrow to see your first data point connect!',
+          ),
+        ],
       );
     }
 
@@ -512,15 +510,22 @@ class _TrendCardState extends State<TrendCard> {
     );
     final minY = w.reduce((a, b) => a < b ? a : b);
     final maxY = w.reduce((a, b) => a > b ? a : b);
-    final pad = (maxY - minY) * 0.25 + 0.5;
+    // Zero range (one weigh-in, or several identical) would pin the dot to
+    // the axis and collapse the grid interval to near zero.
+    final range = maxY - minY;
+    final pad = range > 0
+        ? range * 0.25 + 0.5
+        : (maxY.abs() * 0.03).clamp(0.5, 5.0);
+    final loY = minY - pad;
+    final hiY = maxY + pad;
 
     return LineChartData(
-      minY: minY - pad,
-      maxY: maxY + pad,
+      minY: loY,
+      maxY: hiY,
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        horizontalInterval: ((maxY - minY) / 3 + 0.001),
+        horizontalInterval: (hiY - loY) / 3,
         getDrawingHorizontalLine: (v) =>
             FlLine(color: kGridline, strokeWidth: 1),
       ),

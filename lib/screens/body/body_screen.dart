@@ -1004,10 +1004,20 @@ class _BodyScreenState extends State<BodyScreen> {
           (_dateLabel(s['created_at'] as String?), _score(s)!.toDouble()),
     ];
 
-    final emptyHint = switch (_metricTab) {
+    // Shown under a chart holding exactly one point.
+    final singlePointHint = switch (_metricTab) {
       1 =>
-        'Tap the WEIGHT card above to log your bodyweight — '
-            'two entries start the trend',
+        'Log your weight daily to start building your trend — check back '
+            'tomorrow to see your first data point connect!',
+      2 =>
+        'That is your first score. Scan again to see how it moves over time.',
+      _ =>
+        'That is your first reading. Scan again to see how it moves over '
+            'time.',
+    };
+
+    final emptyHint = switch (_metricTab) {
+      1 => 'Tap the WEIGHT card above to log your bodyweight',
       2 => 'Scan again to track your score over time',
       _ => 'Scan again to track body fat over time',
     };
@@ -1047,7 +1057,10 @@ class _BodyScreenState extends State<BodyScreen> {
           const SizedBox(height: 14),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: series.length < 2
+            // Only a genuinely empty series hides the chart. One entry still
+            // draws, so its dot confirms the log or scan saved — hiding it
+            // made a successful log look like nothing had happened.
+            child: series.isEmpty
                 ? SizedBox(
                     height: 140,
                     child: Center(
@@ -1061,11 +1074,19 @@ class _BodyScreenState extends State<BodyScreen> {
                       ),
                     ),
                   )
-                : switch (_metricTab) {
-                    1 => _weightMetric(weightSeries),
-                    2 => _scoreMetric(scoreSeries),
-                    _ => _bfMetric(bfSeries),
-                  },
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      switch (_metricTab) {
+                        1 => _weightMetric(weightSeries),
+                        2 => _scoreMetric(scoreSeries),
+                        _ => _bfMetric(bfSeries),
+                      },
+                      // Drops away at two points, where the line itself
+                      // explains the chart.
+                      if (series.length < 2) ChartHint(singlePointHint),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -1170,7 +1191,15 @@ class _BodyScreenState extends State<BodyScreen> {
     final values = series.map((e) => e.$2).toList();
     final minY = values.reduce((a, b) => a < b ? a : b);
     final maxY = values.reduce((a, b) => a > b ? a : b);
-    final pad = (maxY - minY) * 0.25 + 0.3;
+    // A single point (or a flat series) has zero range, which would leave the
+    // dot pinned to the axis and — because the grid interval is derived from
+    // the range — ask fl_chart to draw a gridline every 0.001 units.
+    final range = maxY - minY;
+    final pad = range > 0
+        ? range * 0.25 + 0.3
+        : (maxY.abs() * 0.03).clamp(0.5, 5.0);
+    final loY = minY - pad;
+    final hiY = maxY + pad;
     // No unit on the point labels — the headline above the chart already
     // says what the number is, and "162.0lbs" is wide enough that the suffix
     // alone forces labels to be dropped.
@@ -1195,7 +1224,7 @@ class _BodyScreenState extends State<BodyScreen> {
             gridData: FlGridData(
               show: true,
               drawVerticalLine: false,
-              horizontalInterval: ((maxY - minY) / 3 + 0.001),
+              horizontalInterval: (hiY - loY) / 3,
               getDrawingHorizontalLine: (v) =>
                   FlLine(color: kGridline, strokeWidth: 1),
             ),

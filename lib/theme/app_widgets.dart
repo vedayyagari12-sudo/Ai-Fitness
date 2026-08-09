@@ -16,6 +16,53 @@ import 'app_theme.dart';
 double navBarClearance(BuildContext context) =>
     MediaQuery.paddingOf(context).bottom;
 
+/// Quiet explanatory line under a chart that cannot show a trend yet.
+///
+/// A single logged point is real data, but with nothing to connect it to it
+/// reads as a broken chart rather than as progress. This says what to do
+/// next, and disappears once there is a second point to draw a line to.
+class ChartHint extends StatelessWidget {
+  const ChartHint(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.textMuted.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(
+              Icons.trending_up_rounded,
+              size: 14,
+              color: AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A bottom sheet that cannot overflow.
 ///
 /// The default sheet is capped near half the screen and does not scroll, so
