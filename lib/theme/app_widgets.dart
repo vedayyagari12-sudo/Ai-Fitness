@@ -16,6 +16,13 @@ import 'app_theme.dart';
 double navBarClearance(BuildContext context) =>
     MediaQuery.paddingOf(context).bottom;
 
+/// Shown under a weight chart holding a single point. Lives here because
+/// both the dashboard trend card and the BODY tab render it, and a wording
+/// change to one copy would silently leave the other stale.
+const String kFirstWeighInHint =
+    'Log your weight daily to start building your trend — check back '
+    'tomorrow to see your first data point connect!';
+
 /// Quiet explanatory line under a chart that cannot show a trend yet.
 ///
 /// A single logged point is real data, but with nothing to connect it to it

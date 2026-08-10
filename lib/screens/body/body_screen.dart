@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../api_service.dart';
 import '../../services/nav_service.dart';
 import '../../utils/chart_labels.dart';
+import '../../utils/chart_range.dart';
 import '../../utils/muscle_focus.dart';
 import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
@@ -992,11 +993,16 @@ class _BodyScreenState extends State<BodyScreen> {
         if (_bf(s) != null) (_dateLabel(s['created_at'] as String?), _bf(s)!),
     ];
     final weightSeries = <(String, double)>[
+      // Skip rows with no weight rather than plotting them as 0 lbs. A null
+      // became a real point that dragged the line to zero, read as a huge
+      // loss in the takeaway, and counted toward the length check that
+      // decides whether this is still a first weigh-in.
       for (final w in _bodyweight)
-        (
-          _dateLabel(w['created_at'] as String?),
-          kgToLbs((w['weight_kg'] as num?) ?? 0),
-        ),
+        if (w['weight_kg'] != null)
+          (
+            _dateLabel(w['created_at'] as String?),
+            kgToLbs((w['weight_kg'] as num).toDouble()),
+          ),
     ];
     final scoreSeries = <(String, double)>[
       for (final s in _scans)
@@ -1006,9 +1012,7 @@ class _BodyScreenState extends State<BodyScreen> {
 
     // Shown under a chart holding exactly one point.
     final singlePointHint = switch (_metricTab) {
-      1 =>
-        'Log your weight daily to start building your trend — check back '
-            'tomorrow to see your first data point connect!',
+      1 => kFirstWeighInHint,
       2 =>
         'That is your first score. Scan again to see how it moves over time.',
       _ =>
@@ -1077,10 +1081,14 @@ class _BodyScreenState extends State<BodyScreen> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // `series` is the windowed list. Passing the raw
+                      // weightSeries/scoreSeries/bfSeries here meant the
+                      // window never applied and the charts still drew the
+                      // whole history.
                       switch (_metricTab) {
-                        1 => _weightMetric(weightSeries),
-                        2 => _scoreMetric(scoreSeries),
-                        _ => _bfMetric(bfSeries),
+                        1 => _weightMetric(series),
+                        2 => _scoreMetric(series),
+                        _ => _bfMetric(series),
                       },
                       // Drops away at two points, where the line itself
                       // explains the chart.
@@ -1133,18 +1141,43 @@ class _BodyScreenState extends State<BodyScreen> {
   }
 
   Widget _bfMetric(List<(String, double)> series) {
+    if (series.length < 2) {
+      // One reading compared against itself is 0.0%, which the general path
+      // renders as "moving the right way" — progress nothing has measured.
+      return _metricBody(
+        headline: 'Now ${series.last.$2.toStringAsFixed(1)}% body fat',
+        takeaway: 'Your first reading',
+        takeawayColor: kCyan,
+        chart: _metricLine(series, kPink),
+      );
+    }
     final change = series.last.$2 - series.first.$2;
     return _metricBody(
       headline: 'Now ${series.last.$2.toStringAsFixed(1)}% body fat',
+      // "since your first scan" was wrong once the chart started showing a
+      // window: series.first is the oldest scan *in view*, not the oldest
+      // ever, for anyone past the window size.
       takeaway:
-          '${change <= 0 ? '' : '+'}${change.toStringAsFixed(1)}% since your '
-          'first scan${change <= 0 ? ' — moving the right way' : ''}',
+          '${change <= 0 ? '' : '+'}${change.toStringAsFixed(1)}% across your '
+          'last ${series.length} scans'
+          '${change <= 0 ? ' — moving the right way' : ''}',
       takeawayColor: change <= 0 ? kGreen : kPink,
       chart: _metricLine(series, kPink),
     );
   }
 
   Widget _weightMetric(List<(String, double)> series) {
+    if (series.length < 2) {
+      // The general path would read "Started 162.0 · Now 162.0 lbs" and
+      // "+0.0 lbs (last 30 days)" — a start and a 30-day history invented
+      // from a single entry.
+      return _metricBody(
+        headline: '${series.last.$2.toStringAsFixed(1)} lbs',
+        takeaway: 'First weigh-in recorded',
+        takeawayColor: kCyan,
+        chart: _metricLine(series, kCyan),
+      );
+    }
     final change = series.last.$2 - series.first.$2;
     final g = _goal.toLowerCase();
     final gaining = change > 0;
@@ -1176,11 +1209,22 @@ class _BodyScreenState extends State<BodyScreen> {
   }
 
   Widget _scoreMetric(List<(String, double)> series) {
+    if (series.length < 2) {
+      // Otherwise: "+0 vs your first scan across 1 scans".
+      return _metricBody(
+        headline: 'Latest score ${series.last.$2.round()}/100',
+        takeaway: 'Your first scan',
+        takeawayColor: kCyan,
+        chart: _scoreBars(series),
+      );
+    }
     final change = (series.last.$2 - series.first.$2).round();
     return _metricBody(
       headline: 'Latest score ${series.last.$2.round()}/100',
+      // Same correction: with a window, series.first is not the first scan,
+      // and series.length is the window size rather than the scan count.
       takeaway:
-          '${change >= 0 ? '+' : ''}$change vs your first scan across '
+          '${change >= 0 ? '+' : ''}$change across your last '
           '${series.length} scans',
       takeawayColor: change >= 0 ? kGreen : kPink,
       chart: _scoreBars(series),
@@ -1189,17 +1233,8 @@ class _BodyScreenState extends State<BodyScreen> {
 
   Widget _metricLine(List<(String, double)> series, Color color) {
     final values = series.map((e) => e.$2).toList();
-    final minY = values.reduce((a, b) => a < b ? a : b);
-    final maxY = values.reduce((a, b) => a > b ? a : b);
-    // A single point (or a flat series) has zero range, which would leave the
-    // dot pinned to the axis and — because the grid interval is derived from
-    // the range — ask fl_chart to draw a gridline every 0.001 units.
-    final range = maxY - minY;
-    final pad = range > 0
-        ? range * 0.25 + 0.3
-        : (maxY.abs() * 0.03).clamp(0.5, 5.0);
-    final loY = minY - pad;
-    final hiY = maxY + pad;
+    final yr = paddedYRange(values, basePad: 0.3);
+    final xr = xRangeFor(values.length);
     // No unit on the point labels — the headline above the chart already
     // says what the number is, and "162.0lbs" is wide enough that the suffix
     // alone forces labels to be dropped.
@@ -1219,12 +1254,15 @@ class _BodyScreenState extends State<BodyScreen> {
         );
         return LineChart(
           LineChartData(
-            minY: minY - pad,
-            maxY: maxY + pad,
+            minY: yr.min,
+            maxY: yr.max,
+            // A lone point would otherwise be pinned to the left border.
+            minX: xr.min,
+            maxX: xr.max,
             gridData: FlGridData(
               show: true,
               drawVerticalLine: false,
-              horizontalInterval: (hiY - loY) / 3,
+              horizontalInterval: yr.interval(),
               getDrawingHorizontalLine: (v) =>
                   FlLine(color: kGridline, strokeWidth: 1),
             ),

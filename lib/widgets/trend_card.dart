@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import '../utils/chart_labels.dart';
+import '../utils/chart_range.dart';
 import '../utils/units.dart';
 
 /// Dashboard trends card — four tabs, each with a headline number, a chart
@@ -157,10 +158,11 @@ class _TrendCardState extends State<TrendCard> {
 
   /// Charts need their real width to decide how many value labels fit, and
   /// only the layout knows it.
-  Widget _chart(Widget Function(double width) build) => SizedBox(
-    height: _chartHeight,
-    child: LayoutBuilder(builder: (_, c) => build(c.maxWidth)),
-  );
+  Widget _chart(Widget Function(double width) build, {double? height}) =>
+      SizedBox(
+        height: height ?? _chartHeight,
+        child: LayoutBuilder(builder: (_, c) => build(c.maxWidth)),
+      );
 
   Widget _empty(String hint) {
     return SizedBox(
@@ -423,6 +425,9 @@ class _TrendCardState extends State<TrendCard> {
     // single dot confirms the log saved, and say what turns it into a trend —
     // a lone point with no line reads as a broken chart otherwise.
     if (w.length < 2) {
+      // Mirrors the populated view's headline/takeaway/chart rhythm, with a
+      // shorter plot to offset the hint — otherwise the card is ~60dp taller
+      // here and visibly shrinks the day the second weigh-in arrives.
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -432,24 +437,24 @@ class _TrendCardState extends State<TrendCard> {
             child: Text(
               '${lbsLabel(w.first)} lbs',
               style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
                 color: kTextPrimary,
-                height: 1.0,
               ),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'First weigh-in recorded',
-            style: TextStyle(fontSize: 13, color: kTextMuted),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: kCyan,
+            ),
           ),
           const SizedBox(height: 14),
-          _chart((width) => LineChart(_weightLine(kCyan, width))),
-          const ChartHint(
-            'Log your weight daily to start building your trend — check back '
-            'tomorrow to see your first data point connect!',
-          ),
+          _chart((width) => LineChart(_weightLine(kCyan, width)), height: 110),
+          const ChartHint(kFirstWeighInHint),
         ],
       );
     }
@@ -508,24 +513,20 @@ class _TrendCardState extends State<TrendCard> {
       style: _valueLabelStyle,
       pointSpacing: linePointSpacing(width, w.length),
     );
-    final minY = w.reduce((a, b) => a < b ? a : b);
-    final maxY = w.reduce((a, b) => a > b ? a : b);
-    // Zero range (one weigh-in, or several identical) would pin the dot to
-    // the axis and collapse the grid interval to near zero.
-    final range = maxY - minY;
-    final pad = range > 0
-        ? range * 0.25 + 0.5
-        : (maxY.abs() * 0.03).clamp(0.5, 5.0);
-    final loY = minY - pad;
-    final hiY = maxY + pad;
+    final yr = paddedYRange(w);
+    final xr = xRangeFor(w.length);
 
     return LineChartData(
-      minY: loY,
-      maxY: hiY,
+      minY: yr.min,
+      maxY: yr.max,
+      // Without an explicit window a lone point sits on the left border with
+      // its value label half outside the plot.
+      minX: xr.min,
+      maxX: xr.max,
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        horizontalInterval: (hiY - loY) / 3,
+        horizontalInterval: yr.interval(),
         getDrawingHorizontalLine: (v) =>
             FlLine(color: kGridline, strokeWidth: 1),
       ),

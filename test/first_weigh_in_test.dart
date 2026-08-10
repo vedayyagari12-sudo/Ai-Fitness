@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:physiqo_ai/theme/app_widgets.dart';
@@ -39,12 +40,59 @@ void main() {
   ) async {
     await openWeightTab(tester, [162.0]);
 
-    // The chart has to render: hiding it made a saved log look like nothing
-    // had happened. A zero-range series also used to collapse the grid
-    // interval toward zero, so this catches that too.
+    // Assert the chart itself, not the headline text — the old text-only
+    // view also rendered "162", so a text assertion passes even with the
+    // LineChart deleted, which is exactly the regression this pins.
+    expect(
+      find.byType(LineChart),
+      findsOneWidget,
+      reason: 'the single point must be drawn, not just described',
+    );
     expect(tester.takeException(), isNull);
     expect(find.byType(ChartHint), findsOneWidget);
-    expect(find.textContaining('162'), findsWidgets);
+  });
+
+  testWidgets('the lone point is centred, not pinned to the left edge', (
+    tester,
+  ) async {
+    await openWeightTab(tester, [162.0]);
+
+    // With one spot fl_chart derives minX == maxX and paints at x = 0 — the
+    // plot's left border — putting the dot and its value label half outside
+    // the chart. An explicit x window is what centres it.
+    final chart = tester.widget<LineChart>(find.byType(LineChart));
+    final data = chart.data;
+    expect(data.minX, lessThan(0));
+    expect(data.maxX, greaterThan(0));
+    expect(
+      (data.minX + data.maxX) / 2,
+      closeTo(0, 0.001),
+      reason: 'the single spot sits at x=0, so the window must straddle it',
+    );
+  });
+
+  testWidgets('a flat series is not zoomed differently from a near-flat one', (
+    tester,
+  ) async {
+    // Padding used to branch on range == 0, so 162.0/162.0 and 162.0/162.1
+    // rendered at wildly different zoom levels.
+    await openWeightTab(tester, [162.0, 162.0]);
+    final flat = tester.widget<LineChart>(find.byType(LineChart)).data;
+    final flatSpan = flat.maxY - flat.minY;
+
+    await openWeightTab(tester, [162.0, 162.1]);
+    final nearFlat = tester.widget<LineChart>(find.byType(LineChart)).data;
+    final nearFlatSpan = nearFlat.maxY - nearFlat.minY;
+
+    expect(nearFlatSpan, closeTo(flatSpan, flatSpan * 0.15));
+  });
+
+  testWidgets('the gridline interval never collapses', (tester) async {
+    await openWeightTab(tester, [162.0]);
+    final data = tester.widget<LineChart>(find.byType(LineChart)).data;
+    // Derived from the data's own range, this went to ~0.001 for a flat
+    // series and asked for hundreds of gridlines.
+    expect(data.gridData.horizontalInterval, greaterThan(0.1));
   });
 
   testWidgets('the first weigh-in explains what happens next', (tester) async {
