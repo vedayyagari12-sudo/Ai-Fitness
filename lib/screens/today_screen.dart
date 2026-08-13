@@ -203,9 +203,28 @@ class _TodayScreenState extends State<TodayScreen> {
   /// Weekly estimated 1-rep max, oldest → newest (last 8 weeks) — the best
   /// (highest) Epley estimate from any logged set that week. Computed
   /// client-side from raw workout rows so it needs no backend change.
-  List<double> get _weeklyStrength {
+  List<double> get _weeklyStrength => [
+    for (final e in _weeklyStrengthEntries) e.est1rm,
+  ];
+
+  /// Which lift produced each week's best estimate, index-aligned with
+  /// [_weeklyStrength]. Empty string where a week has no logged sets.
+  ///
+  /// Worth surfacing: the best estimate can come from a different exercise
+  /// each week, so a bare number gives no idea what lift it describes.
+  List<String> get _weeklyStrengthExercises => [
+    for (final e in _weeklyStrengthEntries) e.exercise,
+  ];
+
+  /// Best Epley estimate per week, oldest → newest, with the lift that set
+  /// it. Computed client-side from raw workout rows so it needs no backend
+  /// change.
+  List<({double est1rm, String exercise})> get _weeklyStrengthEntries {
     const weeks = 8;
-    final best = List<double>.filled(weeks, 0.0);
+    final best = List<({double est1rm, String exercise})>.filled(weeks, (
+      est1rm: 0.0,
+      exercise: '',
+    ));
     final now = DateTime.now();
     for (final w in _workouts) {
       final row = w as Map<String, dynamic>;
@@ -222,7 +241,12 @@ class _TodayScreenState extends State<TodayScreen> {
       // logged in lbs already (unlike bodyweight, which is stored in kg).
       final est1rm = weight * (1 + reps / 30);
       final idx = weeks - 1 - weeksAgo; // oldest first
-      if (est1rm > best[idx]) best[idx] = est1rm;
+      if (est1rm > best[idx].est1rm) {
+        best[idx] = (
+          est1rm: est1rm,
+          exercise: (row['exercise'] as String?)?.trim() ?? '',
+        );
+      }
     }
     return best;
   }
@@ -326,6 +350,7 @@ class _TodayScreenState extends State<TodayScreen> {
         calorieTarget: _calorieTarget,
         weeklyVolume: _weeklyVolume,
         weeklyStrength: _weeklyStrength,
+        strengthExercises: _weeklyStrengthExercises,
       ),
       const SizedBox(height: 12),
       // IntrinsicHeight + stretch: the two cards hold different amounts of

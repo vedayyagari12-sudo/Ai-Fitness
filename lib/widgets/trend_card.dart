@@ -28,6 +28,7 @@ class TrendCard extends StatefulWidget {
     required this.calorieTarget,
     required this.weeklyVolume,
     this.weeklyStrength = const [],
+    this.strengthExercises = const [],
   });
 
   final String goal; // "bulk" | "cut" | "maintain" | "athletic"
@@ -37,6 +38,11 @@ class TrendCard extends StatefulWidget {
   final double calorieTarget; // kcal/day
   final List<double> weeklyVolume; // lbs lifted per week, oldest → newest
   final List<double> weeklyStrength; // est. 1RM (lbs) per week, oldest→newest
+
+  /// The lift behind each week's estimate, index-aligned with
+  /// [weeklyStrength]. A bare 1RM number says nothing about which exercise
+  /// it describes, and the best lift can differ from one week to the next.
+  final List<String> strengthExercises;
 
   @override
   State<TrendCard> createState() => _TrendCardState();
@@ -747,6 +753,13 @@ class _TrendCardState extends State<TrendCard> {
         ? ((current - previous) / previous * 100).round()
         : null;
 
+    // Which lift set the most recent bar. Length-guarded rather than
+    // index-guarded, so the two lists falling out of step degrades to no
+    // name rather than to a wrong one.
+    final currentExercise = widget.strengthExercises.length == str.length
+        ? widget.strengthExercises.last
+        : '';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -758,7 +771,10 @@ class _TrendCardState extends State<TrendCard> {
             children: [
               Flexible(
                 child: Text(
-                  'Estimated 1-Rep Max (lbs)',
+                  // Says "best lift each week" because the bars are not all
+                  // the same exercise — each is whatever lift produced that
+                  // week's highest estimate.
+                  'Est. 1-Rep Max · best lift each week',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -780,7 +796,9 @@ class _TrendCardState extends State<TrendCard> {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  '${_formatThousands(current.round())} lbs this week',
+                  currentExercise.isEmpty
+                      ? '${_formatThousands(current.round())} lbs this week'
+                      : '${_formatThousands(current.round())} lbs · $currentExercise',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -966,6 +984,19 @@ class _TrendCardState extends State<TrendCard> {
               'chart tracks your peak strength, not a typical set. It\'s '
               'an estimate to watch trend over time, not a number to '
               'chase by itself.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'That means the bars are not all the same lift. Each one is '
+              'whatever exercise topped your estimates that week, so a week '
+              'where you went heavy on squats and one where you went heavy '
+              'on bench sit side by side. The lift behind the latest bar is '
+              'named above the chart.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
