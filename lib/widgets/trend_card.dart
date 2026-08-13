@@ -28,7 +28,7 @@ class TrendCard extends StatefulWidget {
     required this.calorieTarget,
     required this.weeklyVolume,
     this.weeklyStrength = const [],
-    this.strengthExercises = const [],
+    this.strengthExercise = '',
   });
 
   final String goal; // "bulk" | "cut" | "maintain" | "athletic"
@@ -39,10 +39,9 @@ class TrendCard extends StatefulWidget {
   final List<double> weeklyVolume; // lbs lifted per week, oldest → newest
   final List<double> weeklyStrength; // est. 1RM (lbs) per week, oldest→newest
 
-  /// The lift behind each week's estimate, index-aligned with
-  /// [weeklyStrength]. A bare 1RM number says nothing about which exercise
-  /// it describes, and the best lift can differ from one week to the next.
-  final List<String> strengthExercises;
+  /// The single lift [weeklyStrength] follows. Empty when nothing has been
+  /// logged with both a weight and reps.
+  final String strengthExercise;
 
   @override
   State<TrendCard> createState() => _TrendCardState();
@@ -753,12 +752,7 @@ class _TrendCardState extends State<TrendCard> {
         ? ((current - previous) / previous * 100).round()
         : null;
 
-    // Which lift set the most recent bar. Length-guarded rather than
-    // index-guarded, so the two lists falling out of step degrades to no
-    // name rather than to a wrong one.
-    final currentExercise = widget.strengthExercises.length == str.length
-        ? widget.strengthExercises.last
-        : '';
+    final exercise = widget.strengthExercise;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -771,10 +765,11 @@ class _TrendCardState extends State<TrendCard> {
             children: [
               Flexible(
                 child: Text(
-                  // Says "best lift each week" because the bars are not all
-                  // the same exercise — each is whatever lift produced that
-                  // week's highest estimate.
-                  'Est. 1-Rep Max · best lift each week',
+                  // Naming the lift is the whole point: an unlabelled 1RM
+                  // tells the user nothing about what it measures.
+                  exercise.isEmpty
+                      ? 'Estimated 1-Rep Max (lbs)'
+                      : 'Est. 1-Rep Max · $exercise',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -796,9 +791,7 @@ class _TrendCardState extends State<TrendCard> {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  currentExercise.isEmpty
-                      ? '${_formatThousands(current.round())} lbs this week'
-                      : '${_formatThousands(current.round())} lbs · $currentExercise',
+                  '${_formatThousands(current.round())} lbs this week',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -979,11 +972,10 @@ class _TrendCardState extends State<TrendCard> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Each week, we take your single heaviest estimate from '
-              'anything you logged that week — not an average — so the '
-              'chart tracks your peak strength, not a typical set. It\'s '
-              'an estimate to watch trend over time, not a number to '
-              'chase by itself.',
+              'The chart follows one lift — the exercise you have logged in '
+              'the most weeks, named above the chart. Each bar is your best '
+              'estimate for that lift that week, not an average, so it '
+              'tracks your peak rather than a typical set.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
@@ -992,11 +984,9 @@ class _TrendCardState extends State<TrendCard> {
             ),
             const SizedBox(height: 14),
             Text(
-              'That means the bars are not all the same lift. Each one is '
-              'whatever exercise topped your estimates that week, so a week '
-              'where you went heavy on squats and one where you went heavy '
-              'on bench sit side by side. The lift behind the latest bar is '
-              'named above the chart.',
+              'A week with no bar means you did not log that lift, not that '
+              'you got weaker. Log a different exercise more often and the '
+              'chart follows that one instead.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,

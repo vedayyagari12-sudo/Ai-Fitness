@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:physiqo_ai/widgets/trend_card.dart';
 
-/// A 1-rep max number on its own says nothing about which lift it describes,
-/// and the estimate can come from a different exercise each week — so the
-/// card names the lift behind the most recent bar.
+/// The 1RM chart follows a single lift and names it. An unlabelled number
+/// tells the user nothing about what it measures, and a chart that mixed
+/// lifts week to week made a squat week beside a curl week look like a
+/// collapse in strength.
 void main() {
   Future<void> openStrengthTab(
     WidgetTester tester, {
     required List<double> strength,
-    List<String> exercises = const [],
+    String exercise = '',
   }) async {
     tester.view.physicalSize = const Size(360, 900);
     tester.view.devicePixelRatio = 1.0;
@@ -36,7 +37,7 @@ void main() {
               calorieTarget: 2200,
               weeklyVolume: const [100],
               weeklyStrength: strength,
-              strengthExercises: exercises,
+              strengthExercise: exercise,
             ),
           ),
         ),
@@ -47,66 +48,50 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('names the lift behind the latest estimate', (tester) async {
+  testWidgets('names the lift the chart is following', (tester) async {
     await openStrengthTab(
       tester,
       strength: [225, 245, 315],
-      exercises: ['Bench Press', 'Squat', 'Deadlift'],
+      exercise: 'Deadlift',
     );
 
     expect(find.textContaining('Deadlift'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('says the bars are each week\'s best lift, not one exercise', (
+  testWidgets('falls back to a plain title when no lift qualifies', (
     tester,
   ) async {
-    // Without this the chart looks like a single lift's progression, and a
-    // week topped by squats next to one topped by bench reads as a decline.
-    await openStrengthTab(
-      tester,
-      strength: [225, 315],
-      exercises: ['Bench Press', 'Deadlift'],
-    );
+    // Nothing logged with both a weight and reps, so there is no lift to
+    // name — but the card must still render rather than showing "· ".
+    await openStrengthTab(tester, strength: [225, 245]);
 
-    expect(find.textContaining('best lift each week'), findsOneWidget);
-  });
-
-  testWidgets('falls back to the plain value when no lift is known', (
-    tester,
-  ) async {
-    // Older cached workout rows may carry no exercise name.
-    await openStrengthTab(tester, strength: [225, 245], exercises: const []);
-
-    expect(find.textContaining('lbs this week'), findsOneWidget);
+    expect(find.textContaining('Estimated 1-Rep Max'), findsOneWidget);
+    expect(find.textContaining('·'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a mismatched name list is ignored rather than mislabelling', (
-    tester,
-  ) async {
-    // Showing the wrong lift is worse than showing none, so the guard is on
-    // the whole list's length, not on an index.
-    await openStrengthTab(
-      tester,
-      strength: [225, 245, 315],
-      exercises: ['Bench Press'],
-    );
-
-    expect(find.textContaining('Bench Press'), findsNothing);
-    expect(find.textContaining('lbs this week'), findsOneWidget);
-  });
-
-  testWidgets('an empty exercise name does not leave a dangling separator', (
+  testWidgets('a long exercise name does not overflow the card', (
     tester,
   ) async {
     await openStrengthTab(
       tester,
       strength: [225, 245],
-      exercises: ['Bench Press', ''],
+      exercise: 'Bulgarian Split Squat (Rear Foot Elevated)',
     );
 
-    expect(find.textContaining('lbs ·'), findsNothing);
-    expect(find.textContaining('lbs this week'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a gap week renders without breaking the chart', (tester) async {
+    // A week the tracked lift was not performed is a genuine zero.
+    await openStrengthTab(
+      tester,
+      strength: [225, 0, 245],
+      exercise: 'Bench Press',
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Bench Press'), findsOneWidget);
   });
 }

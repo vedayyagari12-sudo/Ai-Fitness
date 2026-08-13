@@ -10,6 +10,7 @@ import '../services/today_cache.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import '../theme/theme_controller.dart';
+import '../utils/strength_trend.dart';
 import '../utils/units.dart';
 import '../widgets/physique_mini_card.dart';
 import '../widgets/readiness_card.dart';
@@ -200,56 +201,12 @@ class _TodayScreenState extends State<TodayScreen> {
       (w['total_volume'] as num?)?.toDouble() ?? 0.0,
   ];
 
-  /// Weekly estimated 1-rep max, oldest → newest (last 8 weeks) — the best
-  /// (highest) Epley estimate from any logged set that week. Computed
-  /// client-side from raw workout rows so it needs no backend change.
-  List<double> get _weeklyStrength => [
-    for (final e in _weeklyStrengthEntries) e.est1rm,
-  ];
-
-  /// Which lift produced each week's best estimate, index-aligned with
-  /// [_weeklyStrength]. Empty string where a week has no logged sets.
+  /// Estimated 1-rep max for a single tracked lift, oldest week first.
   ///
-  /// Worth surfacing: the best estimate can come from a different exercise
-  /// each week, so a bare number gives no idea what lift it describes.
-  List<String> get _weeklyStrengthExercises => [
-    for (final e in _weeklyStrengthEntries) e.exercise,
-  ];
-
-  /// Best Epley estimate per week, oldest → newest, with the lift that set
-  /// it. Computed client-side from raw workout rows so it needs no backend
-  /// change.
-  List<({double est1rm, String exercise})> get _weeklyStrengthEntries {
-    const weeks = 8;
-    final best = List<({double est1rm, String exercise})>.filled(weeks, (
-      est1rm: 0.0,
-      exercise: '',
-    ));
-    final now = DateTime.now();
-    for (final w in _workouts) {
-      final row = w as Map<String, dynamic>;
-      final weight = (row['weight'] as num?)?.toDouble();
-      final reps = (row['reps'] as num?)?.toInt();
-      final created = DateTime.tryParse((row['created_at'] as String?) ?? '');
-      if (weight == null || weight <= 0 || reps == null || reps <= 0) {
-        continue;
-      }
-      if (created == null) continue;
-      final weeksAgo = now.difference(created).inDays ~/ 7;
-      if (weeksAgo < 0 || weeksAgo >= weeks) continue;
-      // Epley formula: est. 1RM = weight × (1 + reps/30). `weight` is
-      // logged in lbs already (unlike bodyweight, which is stored in kg).
-      final est1rm = weight * (1 + reps / 30);
-      final idx = weeks - 1 - weeksAgo; // oldest first
-      if (est1rm > best[idx].est1rm) {
-        best[idx] = (
-          est1rm: est1rm,
-          exercise: (row['exercise'] as String?)?.trim() ?? '',
-        );
-      }
-    }
-    return best;
-  }
+  /// Following one exercise rather than the week's heaviest anything: mixing
+  /// lifts meant a squat week beside a curl week read as a collapse in
+  /// strength, and the number described a different exercise every bar.
+  StrengthTrend get _strengthTrend => strengthTrend(_workouts);
 
   int? get _latestScanScore {
     final scans = ((_dash?['recent_scans'] as List?) ?? [])
@@ -349,8 +306,8 @@ class _TodayScreenState extends State<TodayScreen> {
         dayLabels: _dayLabels,
         calorieTarget: _calorieTarget,
         weeklyVolume: _weeklyVolume,
-        weeklyStrength: _weeklyStrength,
-        strengthExercises: _weeklyStrengthExercises,
+        weeklyStrength: _strengthTrend.weekly,
+        strengthExercise: _strengthTrend.exercise,
       ),
       const SizedBox(height: 12),
       // IntrinsicHeight + stretch: the two cards hold different amounts of
