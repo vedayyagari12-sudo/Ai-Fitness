@@ -970,27 +970,46 @@ class _TrendCardState extends State<TrendCard> {
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
-              'The chart follows one lift — the exercise you have logged in '
-              'the most weeks, named above the chart. Each bar is your best '
-              'estimate for that lift that week, not an average, so it '
-              'tracks your peak rather than a typical set.',
+              'WHICH LIFT THIS CHART FOLLOWS',
+              style: kLabelSmall.copyWith(fontSize: 10),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'One exercise at a time — named at the top of the chart. It '
+              'picks whichever lift you have logged in the most separate '
+              'weeks, because that gives the longest run of history to read '
+              'a trend from. If two are tied, it follows the heavier one, '
+              'since that is usually the main lift rather than an accessory '
+              'you happen to log just as often.\n\n'
+              'You do not set this anywhere. Log a different exercise more '
+              'often and the chart moves to that one.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
-                height: 1.45,
+                height: 1.5,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Text(
-              'A week with no bar means you did not log that lift, not that '
-              'you got weaker. Log a different exercise more often and the '
-              'chart follows that one instead.',
+              'READING THE CHART',
+              style: kLabelSmall.copyWith(fontSize: 10),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Each bar is your best estimate for that lift in that week — '
+              'not an average — so it tracks your peak rather than a typical '
+              'set.\n\n'
+              'An empty week means you did not log that lift, not that you '
+              'got weaker. Only bars with a number are real data.\n\n'
+              'Treat it as an estimate to watch over time rather than a '
+              'number to chase. It moves with how you train, how rested you '
+              'are, and how many reps you happened to do.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
-                height: 1.45,
+                height: 1.5,
               ),
             ),
             const SizedBox(height: 8),
