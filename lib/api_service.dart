@@ -80,8 +80,11 @@ Future<Map<String, dynamic>?> getDashboard() async {
   final userId = getCurrentUserId();
   if (userId == null) return null;
   try {
+    // Same UTC offset the streak endpoint already takes, so "today" means
+    // the user's day rather than the server's.
+    final tz = DateTime.now().timeZoneOffset.inMinutes;
     final response = await http.get(
-      Uri.parse('$baseUrl/dashboard/$userId'),
+      Uri.parse('$baseUrl/dashboard/$userId?tz=$tz'),
       headers: getHeaders(),
     );
     if (response.statusCode == 200) {

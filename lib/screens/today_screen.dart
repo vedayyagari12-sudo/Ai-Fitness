@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../api_service.dart';
 import '../models/readiness_data.dart';
+import '../services/error_reporter.dart';
 import '../services/nav_service.dart';
 import '../services/split_service.dart';
 import '../services/today_cache.dart';
@@ -37,6 +38,11 @@ class _TodayScreenState extends State<TodayScreen> {
   List<dynamic> _workouts = [];
   TrainingSplit _split = TrainingSplit.auto;
 
+  /// True when the last refresh failed but earlier data is still on screen,
+  /// so the user is told the numbers are stale rather than being shown a
+  /// silently frozen dashboard.
+  bool _staleSinceFetchFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -68,14 +74,36 @@ class _TodayScreenState extends State<TodayScreen> {
     ]);
     final split = await SplitService.getSplit();
     if (!mounted) return;
+
+    // Only replace what actually came back. These calls return null/empty on
+    // any failure — a timeout, a 502 while the host wakes from idle — and
+    // assigning that over good data wiped the readiness ring to 0% and left
+    // it there until the next successful load. A failed refresh should be a
+    // no-op, not a reset.
+    final dash = results[0] as Map<String, dynamic>?;
+    final streak = results[1] as Map<String, dynamic>?;
+    final summary = (results[2] as List).cast<Map<String, dynamic>>();
+    final workouts = results[3] as List;
+    final fetchFailed = dash == null;
+
     setState(() {
-      _dash = results[0] as Map<String, dynamic>?;
-      _streak = results[1] as Map<String, dynamic>?;
-      _weeklySummary = (results[2] as List).cast<Map<String, dynamic>>();
-      _workouts = results[3] as List;
+      if (dash != null) _dash = dash;
+      if (streak != null) _streak = streak;
+      if (summary.isNotEmpty || _weeklySummary.isEmpty) {
+        _weeklySummary = summary;
+      }
+      if (workouts.isNotEmpty || _workouts.isEmpty) _workouts = workouts;
       _split = split;
       _loading = false;
+      _staleSinceFetchFailed = fetchFailed && _dash != null;
     });
+
+    if (fetchFailed) {
+      ErrorReporter.report(
+        'dashboard fetch returned null; kept previously loaded data',
+        context: 'todayRefresh',
+      );
+    }
   }
 
   // ── Derived data ────────────────────────────────────────────────────────────
@@ -298,6 +326,12 @@ class _TodayScreenState extends State<TodayScreen> {
         const SizedBox(height: 12),
       ],
       ReadinessCard(data: _readiness),
+      // The numbers below are the last ones that loaded. Saying so beats
+      // either showing them as current or blanking the ring to 0%.
+      if (_staleSinceFetchFailed) ...[
+        const SizedBox(height: 8),
+        const ChartHint("Couldn't refresh — showing your last update."),
+      ],
       const SizedBox(height: 12),
       TrendCard(
         goal: _goal,

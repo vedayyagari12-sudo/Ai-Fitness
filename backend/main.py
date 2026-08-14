@@ -136,13 +136,45 @@ def ensure_user_access(requested_user_id: str, token_user: dict):
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-def last_n_day_labels(n: int = 7) -> list[str]:
-    today = date.today()
+def local_today(tz_offset_minutes: int = 0) -> date:
+    """The user's current calendar day.
+
+    The server runs in UTC, so `date.today()` rolls over at midnight UTC —
+    8pm for a UTC-4 user, who then watches their whole day of logging drop
+    out of "today" four hours early. Shifting by the client's own offset
+    makes the day boundary midnight wherever they are.
+    """
+    return (datetime.now(timezone.utc) + timedelta(minutes=tz_offset_minutes)).date()
+
+
+def local_date_of(value, tz_offset_minutes: int = 0) -> date | None:
+    """The calendar day a stored timestamp falls on for the user.
+
+    Rows are stored in UTC. Bucketing them by their UTC date while comparing
+    against a local "today" just moves the off-by-one rather than fixing it,
+    so both sides have to be shifted by the same offset.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        moment = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    else:
+        try:
+            moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+    return (moment.astimezone(timezone.utc) + timedelta(minutes=tz_offset_minutes)).date()
+
+
+def last_n_day_labels(n: int = 7, tz_offset_minutes: int = 0) -> list[str]:
+    today = local_today(tz_offset_minutes)
     return [(today - timedelta(days=n - 1 - i)).strftime("%a") for i in range(n)]
 
 
-def last_n_dates(n: int = 7) -> list[date]:
-    today = date.today()
+def last_n_dates(n: int = 7, tz_offset_minutes: int = 0) -> list[date]:
+    today = local_today(tz_offset_minutes)
     return [today - timedelta(days=n - 1 - i) for i in range(n)]
 
 
@@ -754,6 +786,7 @@ async def get_bodyweight_history(
 @app.get("/dashboard/{user_id}", response_model=DashboardResponse)
 async def get_dashboard(
     user_id: str,
+    tz: int = 0,  # client's UTC offset in minutes (east positive), as /streak
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security),
     user=Depends(verify_token),
@@ -811,8 +844,8 @@ async def get_dashboard(
         .all()
     )
 
-    day_labels = last_n_day_labels(7)
-    dates = last_n_dates(7)
+    day_labels = last_n_day_labels(7, tz)
+    dates = last_n_dates(7, tz)
 
     daily_calories = []
     daily_protein = []
@@ -824,11 +857,13 @@ async def get_dashboard(
     for d in dates:
         day_cals = [
             c for c in calorie_logs
-            if c.get("created_at", "")[:10] == d.isoformat()
+            if local_date_of(c.get("created_at"), tz) == d
         ]
         cal_sum = sum(float(c.get("calories") or 0) for c in day_cals)
         protein_sum = sum(float(c.get("protein_g") or 0) for c in day_cals)
-        day_workouts = [w for w in workouts if w.created_at.date() == d]
+        day_workouts = [
+            w for w in workouts if local_date_of(w.created_at, tz) == d
+        ]
 
         daily_calories.append(cal_sum)
         daily_protein.append(protein_sum)
@@ -888,16 +923,17 @@ async def get_dashboard(
     charts = build_dashboard_charts(goal, chart_data)
 
     # Sum today's carbs and fat from calorie logs
-    today_str = dates[-1].isoformat() if dates else date.today().isoformat()
+    today_local = dates[-1] if dates else local_today(tz)
+    today_str = today_local.isoformat()
     today_carbs = sum(
         float(c.get("carbs_g") or 0)
         for c in calorie_logs
-        if c.get("created_at", "")[:10] == today_str
+        if local_date_of(c.get("created_at"), tz) == today_local
     )
     today_fat = sum(
         float(c.get("fat_g") or 0)
         for c in calorie_logs
-        if c.get("created_at", "")[:10] == today_str
+        if local_date_of(c.get("created_at"), tz) == today_local
     )
 
     latest_weight = weight_values[-1] if weight_values else 0.0
@@ -1348,12 +1384,17 @@ async def generate_workout(
     recovering_groups = _exercises_to_muscle_groups(recent_exercises)
 
     # ── 4. Build context strings ─────────────────────────────────────────────
+    # The app logs and displays pounds everywhere, so the model is briefed in
+    # pounds too. Told kg, it returned kg loads that the app then rendered as
+    # lbs — a 60 kg suggestion shown, and logged, as 60 lbs.
+    weight_lbs = round(weight_kg * LBS_PER_KG) if weight_kg else None
     profile_block = f"""User Profile:
 - Goal: {profile_goal}
 - Fitness level: {fitness_level}
 - Age: {age if age else 'not specified'}
-- Weight: {weight_kg if weight_kg else 'not specified'} kg
-- Equipment: {profile_equipment}"""
+- Weight: {weight_lbs if weight_lbs else 'not specified'} lbs
+- Equipment: {profile_equipment}
+- ALL weights in your response must be in POUNDS (lbs)."""
 
     has_scan = scan is not None
     if has_scan:
@@ -1382,14 +1423,14 @@ async def generate_workout(
         goal_block = """Goal-specific rules (BULK):
 - Prioritize compound lifts (squat, bench, deadlift, rows, overhead press)
 - Keep reps in the 6-12 range for hypertrophy
-- Apply progressive overload: if a previous weight is known, suggest +2.5kg
+- Apply progressive overload: if a previous weight is known, suggest +5 lbs
 - Use higher overall volume
 - Include one tip about maintaining a calorie surplus for muscle growth"""
     elif "cut" in goal_key or "fat" in goal_key or "lose" in goal_key:
         goal_block = """Goal-specific rules (CUT):
 - Keep heavy compound lifts to preserve muscle mass
 - Slightly reduce total volume vs a bulk
-- Include one tip about protein intake (2.2g per kg bodyweight) to prevent muscle loss
+- Include one tip about protein intake (1g per lb of bodyweight) to prevent muscle loss
 - Do NOT suggest excessive cardio"""
     else:
         goal_block = """Goal-specific rules (ATHLETIC / MAINTAIN):
