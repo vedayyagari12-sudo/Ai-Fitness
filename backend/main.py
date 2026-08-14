@@ -199,6 +199,21 @@ LBS_PER_KG = 2.20462
 WEIGHT_BOUND_TOLERANCE_LBS = 0.05
 
 
+# Which muscle groups each split day is allowed to train. The AI receives a
+# physique priority map that can rank any muscle HIGH, so without an explicit
+# allow-list a weak-legs scan pulls leg work into a push day.
+FOCUS_MUSCLES = {
+    "push": ["chest", "shoulders", "triceps"],
+    "pull": ["back", "lats", "traps", "biceps", "rear delts"],
+    "legs": ["quads", "hamstrings", "glutes", "calves"],
+    "lower body": ["quads", "hamstrings", "glutes", "calves"],
+    "upper body": [
+        "chest", "back", "lats", "shoulders", "triceps", "biceps",
+    ],
+    "full body": [],  # no restriction
+}
+
+
 MUSCLE_SCORE_KEYS = (
     ("chest", "chest_score"),
     ("back", "back_score"),
@@ -1489,12 +1504,35 @@ async def generate_workout(
 - Include unilateral exercises (lunges, single-arm rows, split squats)
 - Vary rep ranges across exercises"""
 
+    # The focus used to be a single trailing line under a priority map that
+    # opened with "prioritize HIGH muscles". A weak-legs scan therefore
+    # produced leg work on a push day, because the map outranked the split in
+    # everything but position. The focus is now stated first, names the
+    # muscles it permits, and explicitly scopes the priority map to them.
+    allowed = FOCUS_MUSCLES.get(focus.strip().lower())
+    if allowed:
+        focus_rule = f"""HARD CONSTRAINT - today is {focus.upper()} day.
+- Every exercise must primarily train one of: {", ".join(allowed)}.
+- Do NOT include exercises for any other muscle group, whatever the priority
+  map says. The map only changes the ORDER and VOLUME of work WITHIN the
+  muscles listed above; it never adds new ones.
+- If every muscle above is marked recovering, still train them, but lighter
+  and with less volume. Never substitute a different muscle group."""
+    else:
+        focus_rule = f"Today is {focus} day - train the whole body evenly."
+
+
     instructions_block = f"""Instructions:
+{focus_rule}
+
+Within those muscles:
 - Prioritize HIGH and MEDIUM muscles with more sets and volume
 - Give STRONG muscles 1-2 maintenance sets only
-- Avoid RECOVERING muscles as primary movers today
+- De-emphasise RECOVERING muscles rather than replacing them
 - Select exercise difficulty appropriate for fitness level
-- Choose exercises compatible with available equipment
+- EQUIPMENT IS A HARD CONSTRAINT: every exercise must be performable with
+  "{profile_equipment}" alone. If that means bands or bodyweight, use band
+  and bodyweight variations - never barbells, machines or cables.
 
 {goal_block}"""
 

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../api_service.dart';
 import '../../services/app_state_service.dart';
 import '../../services/split_service.dart';
+import '../../utils/profile_options.dart';
 import '../../utils/units.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/theme_controller.dart';
@@ -27,6 +28,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   TrainingSplit _split = TrainingSplit.auto;
   bool _loading = true;
 
+  /// The last refresh failed but earlier settings are still on screen.
+  bool _loadFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +42,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final split = await SplitService.getSplit();
     if (!mounted) return;
     setState(() {
-      _profile = profile ?? {};
+      // Keep what is already on screen when the fetch fails. getUserProfile
+      // returns null on any error, and assigning that emptied the map, so
+      // every setting fell back to its "Set" placeholder — indistinguishable
+      // from the settings never having saved, which is what it looked like.
+      if (profile != null) {
+        _profile = profile;
+        _loadFailed = false;
+      } else {
+        _loadFailed = _profile.isNotEmpty;
+      }
       _split = split;
       _loading = false;
     });
@@ -371,6 +384,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 24),
 
                   Text('YOUR DETAILS', style: kLabelSmall),
+                  if (_loadFailed)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        "Couldn't refresh — showing your last saved settings.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 4),
                   _detailRow(
                     'Goal',
@@ -423,20 +447,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _detailRow(
                     'Equipment',
                     _display('equipment'),
-                    () => _editChoice('Equipment', 'equipment', const [
-                      ('Full Gym', 'Full Gym'),
-                      ('Home — Dumbbells', 'Home — Dumbbells'),
-                      ('Bodyweight Only', 'Bodyweight Only'),
-                    ]),
+                    () => _editChoice(
+                      'Equipment',
+                      'equipment',
+                      kEquipmentOptions,
+                      currentOverride: normaliseEquipment(
+                        _profile['equipment'] as String?,
+                      ),
+                    ),
                   ),
                   _detailRow(
                     'Fitness Level',
                     _display('fitness_level'),
-                    () => _editChoice('Fitness level', 'fitness_level', const [
-                      ('Beginner', 'Beginner'),
-                      ('Intermediate', 'Intermediate'),
-                      ('Advanced', 'Advanced'),
-                    ]),
+                    () => _editChoice(
+                      'Fitness level',
+                      'fitness_level',
+                      kFitnessLevelOptions,
+                    ),
                   ),
                   _detailRow(
                     'Weekly Sessions',
@@ -444,7 +471,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     () => _editChoice(
                       'Weekly sessions',
                       'workout_frequency',
-                      const [('1-2', '1-2'), ('3-5', '3-5'), ('6+', '6+')],
+                      kFrequencyOptions,
+                      currentOverride: normaliseFrequency(
+                        _profile['workout_frequency'] as String?,
+                      ),
                     ),
                   ),
                   _detailRow(

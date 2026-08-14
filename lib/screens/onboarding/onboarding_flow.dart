@@ -10,6 +10,7 @@ import '../../services/permission_service.dart';
 import '../../services/split_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
+import '../../utils/profile_options.dart';
 import '../../utils/units.dart';
 
 class OnboardingFlow extends StatefulWidget {
@@ -649,13 +650,17 @@ class _EquipmentStep extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onContinue;
 
-  static const _options = [
-    ('Full Gym', 'All machines and free weights'),
-    ('Home — No Equipment', 'Bodyweight only'),
-    ('Dumbbells Only', 'Pair of dumbbells'),
-    ('Resistance Bands', 'Bands and bodyweight'),
-    ('Barbell Only', 'Barbell setup'),
-  ];
+  // Only the descriptions live here. The values come from the shared list,
+  // because these two screens had drifted into different vocabularies —
+  // onboarding stored "Resistance Bands", which the profile picker did not
+  // offer, so the setting read as unset there however often it was saved.
+  static const _blurbs = {
+    'Full Gym': 'All machines and free weights',
+    'Home — No Equipment': 'Bodyweight only',
+    'Dumbbells Only': 'Pair of dumbbells',
+    'Resistance Bands': 'Bands and bodyweight',
+    'Barbell Only': 'Barbell setup',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -668,13 +673,13 @@ class _EquipmentStep extends StatelessWidget {
       currentStep: 5,
       totalSteps: 8,
       child: Column(
-        children: _options
+        children: kEquipmentOptions
             .map(
               (o) => SelectionTile(
                 label: o.$1,
-                subtitle: o.$2,
-                selected: selected == o.$1,
-                onTap: () => onSelect(o.$1),
+                subtitle: _blurbs[o.$2],
+                selected: selected == o.$2,
+                onTap: () => onSelect(o.$2),
               ),
             )
             .toList(),
