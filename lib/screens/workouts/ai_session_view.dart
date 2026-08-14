@@ -956,11 +956,11 @@ class _AiSessionViewState extends State<AiSessionView> {
                       ),
               ),
               const SizedBox(width: 4),
-              // flex 3 vs 2: `repsRaw` can be prose ("30-45 sec hold per
-              // arm"), which unflexed squeezed the name column to a single
-              // character wide and still ran off the row.
+              // The name takes whatever the reps column does not need. A
+              // fixed flex reserved ~40% of the row for reps even when they
+              // read "4 x 12", and that unused width was what truncated the
+              // names.
               Expanded(
-                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1007,8 +1007,11 @@ class _AiSessionViewState extends State<AiSessionView> {
                 ),
               ),
               const SizedBox(width: 10),
-              Flexible(
-                flex: 2,
+              // Capped rather than flexed: short reps take only the width
+              // they need, while prose ones ("30-45 sec hold per arm") still
+              // cannot grow far enough to crush the name.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 108),
                 child: Text(
                   '${e.sets} × ${e.repsRaw}',
                   textAlign: TextAlign.right,

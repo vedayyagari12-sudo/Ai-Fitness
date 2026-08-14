@@ -247,6 +247,49 @@ def scan_highlights(scan: dict) -> tuple[list[str], list[str]]:
     return focus, strong
 
 
+def parse_ai_json(response, *, what: str) -> dict:
+    """Parse a Gemini JSON reply, failing loudly when it was cut short.
+
+    gemini-2.5-flash is a thinking model and its reasoning counts against the
+    output budget, so a long workout can exhaust the cap and return JSON that
+    simply stops mid-object. json.loads then raises deep inside the endpoint
+    and the caller gets an opaque 500 — which on the TRAIN tab looked like the
+    AI response being truncated.
+    """
+    finish = None
+    try:
+        finish = str(response.candidates[0].finish_reason)
+    except Exception:
+        pass
+
+    try:
+        raw = response.text
+    except Exception as exc:
+        logger.warning("%s: no text in response (finish=%s): %s", what, finish, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"The AI did not return a {what}. Please try again.",
+        )
+
+    clean = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        return json.loads(clean)
+    except json.JSONDecodeError as exc:
+        truncated = finish is not None and "MAX_TOKENS" in finish
+        logger.warning(
+            "%s: unparseable reply (finish=%s, %d chars): %s",
+            what, finish, len(clean), exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"The AI response was cut off before it finished. Please try again."
+                if truncated
+                else f"The AI returned an unreadable {what}. Please try again."
+            ),
+        )
+
+
 def parse_body_fat(value) -> float | None:
     if value is None:
         return None
@@ -1145,9 +1188,7 @@ async def scan_calories(
         roughly sum to the total. Be as accurate as possible. Return only JSON, no other text.""",
     ])
 
-    result = response.text
-    clean = result.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean)
+    return parse_ai_json(response, what="calorie estimate")
 
 
 @app.post("/calories/scan/text")
@@ -1262,9 +1303,7 @@ Return ONLY this JSON with no other text:
     content = image_parts + [prompt]
     response = model.generate_content(content)
 
-    result = response.text
-    clean = result.replace("```json", "").replace("```", "").strip()
-    scan_data = json.loads(clean)
+    scan_data = parse_ai_json(response, what="physique analysis")
 
     saved = await _insert_physique_scan(
         user_id, scan_data, credentials.credentials
@@ -1573,10 +1612,18 @@ Within those muscles:
 
     Make it specific, progressive, and effective. Only return JSON."""
 
-    response = model.generate_content(prompt)
-    result = response.text
-    clean = result.replace("```json", "").replace("```", "").strip()
-    workout = json.loads(clean)
+    # response_mime_type makes Gemini emit bare JSON (no markdown fence), and
+    # an explicit token ceiling stops a long session being truncated
+    # mid-object by the model's own reasoning budget.
+    response = model.generate_content(
+        prompt,
+        generation_config={
+            "response_mime_type": "application/json",
+            "max_output_tokens": 8192,
+            "temperature": 0.7,
+        },
+    )
+    workout = parse_ai_json(response, what="workout")
     if has_scan:
         weak = [m for m, s in muscle_scores.items() if s is not None and s <= 6]
         fallback_why = (
