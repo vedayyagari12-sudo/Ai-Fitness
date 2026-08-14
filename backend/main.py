@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import func as sqlfunc
+from sqlalchemy import func as sqlfunc, text
 from datetime import datetime, timedelta, date, timezone
 from typing import List
 from functools import lru_cache
@@ -28,9 +28,18 @@ from .schemas import (
     BodyweightLogCreate, DashboardResponse, DashboardChart, TodayStats,
 )
 
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger("physiqo")
 
-logger = logging.getLogger("fitai")
+# Table creation is best-effort at import rather than fatal. Letting it raise
+# means the process never binds when the database is unreachable, so the one
+# state the readiness endpoint exists to report — app up, database down —
+# could never actually be reported: the monitor would see a refused
+# connection and nothing would explain it. It also made this module
+# impossible to import in a test without a live database.
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:  # pragma: no cover - depends on deploy environment
+    logger.error("startup: could not create tables (%s); /test-db will 503", exc)
 
 app = FastAPI()
 
@@ -451,18 +460,56 @@ async def get_streak(
     }
 
 
-# GET and HEAD both, explicitly. FastAPI's APIRoute — unlike Starlette's
-# plain Route — does not add HEAD alongside GET, so a bare @app.get answers
-# HEAD with 405. Uptime monitors send HEAD by default, which made a healthy
-# service look down.
-@app.api_route("/", methods=["GET", "HEAD"])
-def root():
+# Separate GET and HEAD decorators rather than one api_route carrying both.
+# FastAPI's APIRoute — unlike Starlette's plain Route — does not add HEAD
+# alongside GET, so a bare @app.get answers HEAD with 405 and an uptime
+# monitor (which sends HEAD by default) reports a healthy service as down.
+# One route with two methods fixes that but emits two OpenAPI operations
+# sharing a single operationId, which is spec-invalid and, because the id is
+# derived from an unordered set, changes between restarts.
+def _liveness() -> dict:
+    """Process is up. Says nothing about the database on purpose."""
     return {"status": "ok", "message": "Physiqo AI backend is running"}
 
 
-@app.api_route("/test-db", methods=["GET", "HEAD"])
+@app.get("/")
+def root():
+    return _liveness()
+
+
+@app.head("/")
+def root_head():
+    return _liveness()
+
+
+def _readiness(db: Session) -> dict:
+    """Round-trips a query, so a dead database actually fails this.
+
+    Depending on get_db alone proves nothing: a SQLAlchemy Session is lazy
+    and checks out no connection until something runs on it, so the previous
+    version reported "Database connected!" with Postgres entirely down —
+    from the very endpoint the uptime monitor and the app's warm-up ping
+    both watch.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        logger.warning("readiness check failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Database unreachable",
+        )
+    return {"status": "ok", "message": "Database connected!"}
+
+
+@app.get("/test-db")
 def test_db(db: Session = Depends(get_db)):
-    return {"message": "Database connected!"}
+    return _readiness(db)
+
+
+@app.head("/test-db")
+def test_db_head(db: Session = Depends(get_db)):
+    return _readiness(db)
     
 
 @app.post("/users", response_model=UserResponse)

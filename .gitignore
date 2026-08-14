@@ -52,3 +52,10 @@ android/key.properties
 **/*.jks
 **/*.keystore
 android/.kotlin/
+
+# Scratch files from redirected shell output — two were stale copies of
+# backend/main.py carrying superseded routes, which made the repo disagree
+# with itself about which definition was real.
+temp_main.py
+s_app
+h origin master

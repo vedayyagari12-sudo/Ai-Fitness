@@ -24,9 +24,10 @@ String? getCurrentUserId() {
 /// is not interesting — the real request will report its own.
 Future<void> warmUpBackend() async {
   try {
-    await http
-        .get(Uri.parse('$baseUrl/test-db'))
-        .timeout(const Duration(seconds: 60));
+    // Root, not /test-db: waking the host needs no database round trip, and
+    // /test-db now returns 503 when Postgres is unreachable — a warm-up has
+    // no opinion about that.
+    await http.get(Uri.parse('$baseUrl/')).timeout(const Duration(seconds: 60));
   } catch (_) {
     // Deliberately silent: this is opportunistic, not a user-visible action.
   }
