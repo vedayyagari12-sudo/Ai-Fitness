@@ -451,12 +451,16 @@ async def get_streak(
     }
 
 
-@app.get("/")
+# GET and HEAD both, explicitly. FastAPI's APIRoute — unlike Starlette's
+# plain Route — does not add HEAD alongside GET, so a bare @app.get answers
+# HEAD with 405. Uptime monitors send HEAD by default, which made a healthy
+# service look down.
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
-    return {"status": "ok", "message": "FitAI backend is running"}
+    return {"status": "ok", "message": "Physiqo AI backend is running"}
 
 
-@app.get("/test-db")
+@app.api_route("/test-db", methods=["GET", "HEAD"])
 def test_db(db: Session = Depends(get_db)):
     return {"message": "Database connected!"}
     
