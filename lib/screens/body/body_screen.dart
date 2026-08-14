@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../api_service.dart';
@@ -10,6 +11,7 @@ import '../../utils/chart_labels.dart';
 import '../../utils/chart_range.dart';
 import '../../utils/muscle_focus.dart';
 import '../../utils/units.dart';
+import '../../utils/weight_validation.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
@@ -484,35 +486,56 @@ class _BodyScreenState extends State<BodyScreen> {
           24,
           24 + MediaQuery.of(ctx).viewInsets.bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text("TODAY'S BODYWEIGHT", style: kLabelSmall),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(suffixText: 'lbs'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Save weight'),
-            ),
-          ],
+        // StatefulBuilder so the error text and the button's enabled state
+        // track what is being typed; the sheet has no state of its own.
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final error = weightInputError(ctrl.text);
+            final canSave = isValidWeightInput(ctrl.text);
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text("TODAY'S BODYWEIGHT", style: kLabelSmall),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  // The numeric keyboard is a hint, not a restriction — a
+                  // physical or third-party keyboard can still send letters.
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  onChanged: (_) => setSheetState(() {}),
+                  decoration: InputDecoration(
+                    suffixText: 'lbs',
+                    errorText: error,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  // Null disables it: an out-of-range value cannot be saved
+                  // rather than being rejected after the round trip.
+                  onPressed: canSave ? () => Navigator.pop(ctx, true) : null,
+                  child: const Text('Save weight'),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
     if (saved != true || !mounted) return;
-    final lbs = double.tryParse(ctrl.text);
-    if (lbs == null || lbs <= 0) {
-      AppSnackbar.error(context, 'Enter a valid weight');
+    // The button is gated on the same check, so this only catches a value
+    // that changed after the sheet closed.
+    if (!isValidWeightInput(ctrl.text)) {
+      AppSnackbar.error(context, kWeightRangeMessage);
       return;
     }
+    final lbs = double.parse(ctrl.text.trim());
     final kg = lbsToKg(lbs);
     final resp = await logBodyweight(kg);
     if (!mounted) return;

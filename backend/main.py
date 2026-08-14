@@ -146,6 +146,18 @@ def last_n_dates(n: int = 7) -> list[date]:
     return [today - timedelta(days=n - 1 - i) for i in range(n)]
 
 
+# Bodyweight bounds, mirroring lib/utils/weight_validation.dart. Enforced
+# here as well because the app's checks only cover requests that come through
+# its own UI, and a bad weight corrupts more than one screen: it feeds the
+# trend chart and the TDEE that the calorie and protein targets derive from.
+MIN_WEIGHT_LBS = 80.0
+MAX_WEIGHT_LBS = 350.0
+LBS_PER_KG = 2.20462
+# The client converts lbs to kg and rounds before sending, so an exact
+# boundary arrives fractionally outside it. Tolerate less than an ounce.
+WEIGHT_BOUND_TOLERANCE_LBS = 0.05
+
+
 MUSCLE_SCORE_KEYS = (
     ("chest", "chest_score"),
     ("back", "back_score"),
@@ -624,6 +636,21 @@ async def log_bodyweight(
     user=Depends(verify_token),
 ):
     user_id = get_user_id(user)
+
+    weight_lbs = log.weight_kg * LBS_PER_KG
+    if not (
+        MIN_WEIGHT_LBS - WEIGHT_BOUND_TOLERANCE_LBS
+        <= weight_lbs
+        <= MAX_WEIGHT_LBS + WEIGHT_BOUND_TOLERANCE_LBS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Weight must be between {MIN_WEIGHT_LBS:.0f} and "
+                f"{MAX_WEIGHT_LBS:.0f} lbs"
+            ),
+        )
+
     uhdr = supabase_user_headers(credentials.credentials)
     today = datetime.now(timezone.utc).date().isoformat()
     async with httpx.AsyncClient() as client:
@@ -945,6 +972,28 @@ async def get_dashboard(
     )
     weekly_goal = parse_weekly_goal(profile.get("workout_frequency"))
     sessions_this_week = sum(1 for s in daily_sessions if s > 0)
+
+    # Trail for the readiness ring. The ring is derived entirely from these
+    # four numbers, so when it reads 0 this line says whether the day was
+    # genuinely empty, whether the rows exist but landed on a different
+    # calendar day (the server buckets by UTC, so a user west of UTC has
+    # their evening counted as tomorrow), or whether a query returned
+    # nothing at all.
+    logger.info(
+        "dashboard ring user=%s server_today=%s calories=%.0f/%.0f "
+        "protein=%.0f/%.0f sessions=%.0f rows(cal=%d workouts=%d) "
+        "latest_cal_row=%s",
+        user_id,
+        today_str,
+        daily_calories[-1] if daily_calories else 0.0,
+        calorie_target,
+        daily_protein[-1] if daily_protein else 0.0,
+        protein_target,
+        daily_sessions[-1] if daily_sessions else 0.0,
+        len(calorie_logs),
+        len(workouts),
+        max((c.get("created_at", "") for c in calorie_logs), default="none"),
+    )
 
     trends = {
         "weight": {"labels": weight_labels, "values": weight_values},
