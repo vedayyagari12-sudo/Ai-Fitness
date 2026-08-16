@@ -14,7 +14,7 @@ import '../../theme/theme_controller.dart';
 import '../../utils/snackbar.dart';
 
 const _appVersion = '1.0.0';
-const _supportEmail = 'physiqoapp@gmail.com';
+const _supportEmail = 'va.appstudio@gmail.com';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

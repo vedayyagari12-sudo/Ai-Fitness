@@ -8,6 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  /// One place, so a future address change cannot leave a page behind while
+  /// the suite still passes.
+  const contactEmail = 'va.appstudio@gmail.com';
+
   const pages = {
     'docs/privacy_policy.html': 'Privacy Policy',
     'docs/terms_of_service.html': 'Terms of Service',
@@ -27,14 +31,18 @@ void main() {
       final html = await rootBundle.loadString(path);
       expect(
         html,
-        contains('physiqoapp@gmail.com'),
+        contains(contactEmail),
         reason: '$path has no contact address',
       );
-      expect(
-        html,
-        isNot(contains('aifitness.app')),
-        reason: '$path still points at the old address, which does not exist',
-      );
+      // Superseded addresses. A page keeping one is worse than a page with
+      // none: it reads as a working contact route and silently drops mail.
+      for (final dead in ['aifitness.app', 'physiqoapp@gmail.com']) {
+        expect(
+          html,
+          isNot(contains(dead)),
+          reason: '$path still points at $dead, which is no longer monitored',
+        );
+      }
     }
   });
 
@@ -64,7 +72,7 @@ void main() {
       final html = await rootBundle.loadString(path);
       expect(
         html,
-        contains('<span class="selectable">physiqoapp@gmail.com</span>'),
+        contains('<span class="selectable">$contactEmail</span>'),
         reason: '$path only offers the address behind a mailto: link',
       );
     }
