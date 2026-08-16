@@ -129,7 +129,9 @@ class _LoginScreenState extends State<LoginScreen> {
         // Match the stable error code first; the human-readable string is
         // free to change between GoTrue releases.
         if (e.code == 'email_not_confirmed' || msg.contains('not confirmed')) {
-          message = 'Please verify your email first — check your inbox.';
+          message =
+              'Please verify your email first — check your inbox, and your '
+              'spam or junk folder.';
           showResend = true;
         } else if (e.code == 'invalid_credentials' ||
             msg.contains('invalid login')) {
@@ -236,7 +238,9 @@ class _LoginScreenState extends State<LoginScreen> {
         emailRedirectTo: kEmailRedirectUrl,
       );
       setState(() {
-        message = 'Verification email sent — check your inbox.';
+        message =
+            'Verification email sent — check your inbox, and your spam or '
+            'junk folder.';
         messageIsError = false;
       });
       _startResendCooldown();
@@ -262,67 +266,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Shown after signup instead of the form: one instruction, one action.
-  Widget _verificationPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Icon(Icons.mark_email_unread_outlined, size: 48, color: kLime),
-        const SizedBox(height: 16),
-        Text(
-          'Check your email to verify your account before logging in',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'We sent a link to $_pendingEmail. Open it, then come back and '
-          'log in.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.textSecondary,
-            height: 1.45,
-          ),
-        ),
-        if (message.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          ),
-        ],
-        const SizedBox(height: 22),
-        ElevatedButton(
-          onPressed: (isLoading || _resendCooldown > 0)
-              ? null
-              : _resendVerification,
-          child: Text(
-            _resendCooldown > 0
-                ? 'Resend in ${_resendCooldown}s'
-                : 'Resend verification email',
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextButton(
-          onPressed: isLoading ? null : _backToLogin,
-          child: const Text('Back to log in'),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "No email? Check spam, and make sure the address is right.",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-        ),
-      ],
-    );
-  }
+  Widget _verificationPanel() => VerificationPanel(
+    email: _pendingEmail ?? '',
+    message: message,
+    isLoading: isLoading,
+    resendCooldown: _resendCooldown,
+    onResend: _resendVerification,
+    onBack: _backToLogin,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -672,6 +623,162 @@ class _LoginScreenState extends State<LoginScreen> {
           decorationColor: AppColors.textMuted,
         ),
       ),
+    );
+  }
+}
+
+/// Shown after signup instead of the form: one instruction, one action.
+///
+/// Presentational and stateless so the copy can be tested without standing up
+/// Supabase. This screen is where a stalled signup either recovers or the user
+/// gives up, so the wording is worth pinning.
+class VerificationPanel extends StatelessWidget {
+  const VerificationPanel({
+    super.key,
+    required this.email,
+    required this.message,
+    required this.isLoading,
+    required this.resendCooldown,
+    required this.onResend,
+    required this.onBack,
+  });
+
+  final String email;
+  final String message;
+  final bool isLoading;
+  final int resendCooldown;
+  final VoidCallback onResend;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Icon(Icons.mark_email_unread_outlined, size: 48, color: kLime),
+        const SizedBox(height: 16),
+        Text(
+          'Check your email to verify your account before logging in',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text.rich(
+          TextSpan(
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.45,
+            ),
+            children: [
+              const TextSpan(text: 'We sent a link to '),
+              TextSpan(
+                text: email,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const TextSpan(text: '. Open it, then come back here and '),
+              // Weighted because the link opens a web page, not the app.
+              // Without a cue, people sit on that page waiting to be let in
+              // rather than returning here to sign in normally.
+              TextSpan(
+                text: 'log in again',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const TextSpan(text: '.'),
+            ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 14),
+        // A plain 11px footnote carried this before, and it was too quiet for
+        // the most common reason a signup stalls: the mail is delivered, just
+        // not to the inbox.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.warningText.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.warningText.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.inbox_outlined,
+                size: 16,
+                color: AppColors.warningText,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                    children: [
+                      const TextSpan(text: "Don't see it? Check your "),
+                      TextSpan(
+                        text: 'spam or junk folder',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const TextSpan(
+                        text:
+                            '. Physiqo AI is a new app, so verification '
+                            'emails sometimes land there.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (message.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ],
+        const SizedBox(height: 22),
+        ElevatedButton(
+          onPressed: (isLoading || resendCooldown > 0) ? null : onResend,
+          child: Text(
+            resendCooldown > 0
+                ? 'Resend in ${resendCooldown}s'
+                : 'Resend verification email',
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextButton(
+          onPressed: isLoading ? null : onBack,
+          child: const Text('Back to log in'),
+        ),
+        const SizedBox(height: 8),
+        // Spam now has its own callout above, so this covers the other way a
+        // signup stalls: the address was mistyped and nothing was delivered.
+        Text(
+          'Still nothing? Check the address above is spelled correctly.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+        ),
+      ],
     );
   }
 }
