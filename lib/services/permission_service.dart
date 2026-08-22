@@ -86,7 +86,7 @@ class PermissionService {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
+            child: Text(
               'OK',
               style: TextStyle(color: kBlue, fontWeight: FontWeight.w600),
             ),
@@ -124,7 +124,7 @@ class PermissionService {
               Navigator.pop(context);
               openAppSettings();
             },
-            child: const Text(
+            child: Text(
               'Open Settings',
               style: TextStyle(color: kBlue, fontWeight: FontWeight.w600),
             ),

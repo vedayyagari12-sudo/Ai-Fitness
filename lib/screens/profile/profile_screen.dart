@@ -118,7 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   trailing: value == current
-                      ? const Icon(Icons.check_rounded, color: kLime, size: 18)
+                      ? Icon(Icons.check_rounded, color: kLime, size: 18)
                       : null,
                   onTap: () => Navigator.pop(ctx, value),
                 ),

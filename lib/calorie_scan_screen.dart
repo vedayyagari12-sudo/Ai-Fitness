@@ -463,7 +463,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
   }
 
   Widget _analyzing() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
@@ -543,7 +543,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
               curve: Curves.easeOutCubic,
               builder: (_, v, _) => Text(
                 '${v.round()}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 52,
                   fontWeight: FontWeight.w900,
                   color: kLime,
@@ -576,7 +576,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
                   child: Center(
                     child: Text(
                       '$pct%',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: kGold,
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -658,7 +658,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
   }
 
   List<Widget> _itemRows() {
-    const dotPalette = [kLime, kCyan, kGold, kPink, kGreen, kBlue];
+    final dotPalette = [kLime, kCyan, kGold, kPink, kGreen, kBlue];
     return [
       for (var i = 0; i < _items.length; i++)
         Container(
@@ -810,7 +810,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> {
 
   static final ButtonStyle _scanBtnStyle = OutlinedButton.styleFrom(
     foregroundColor: kBlue,
-    side: const BorderSide(color: kBlue),
+    side: BorderSide(color: kBlue),
     padding: const EdgeInsets.symmetric(vertical: 14),
     textStyle: const TextStyle(
       fontSize: 16,

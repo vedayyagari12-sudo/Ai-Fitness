@@ -278,7 +278,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
             ],
             const SizedBox(height: 16),
             if (isLoading)
-              const Center(
+              Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Column(
@@ -477,7 +477,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
                 curve: Curves.easeOutCubic,
                 builder: (_, v, _) => Text(
                   '${v.round()}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 64,
                     fontWeight: FontWeight.w900,
                     color: kLime,
@@ -764,10 +764,7 @@ class _PhysiqueScanScreenState extends State<PhysiqueScanScreen> {
             Container(
               width: 40,
               height: 40,
-              decoration: const BoxDecoration(
-                color: kPink,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: kPink, shape: BoxShape.circle),
               child: const Icon(
                 Icons.arrow_forward_rounded,
                 color: Colors.black,

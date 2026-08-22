@@ -992,10 +992,7 @@ class _BodyScreenState extends State<BodyScreen> {
             Container(
               width: 40,
               height: 40,
-              decoration: const BoxDecoration(
-                color: kPink,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: kPink, shape: BoxShape.circle),
               child: const Icon(
                 Icons.arrow_forward_rounded,
                 color: Colors.black,
@@ -1507,7 +1504,7 @@ class _BodyScreenState extends State<BodyScreen> {
                   if (score != null)
                     Text(
                       '$score/100',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: kLime,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -1517,7 +1514,7 @@ class _BodyScreenState extends State<BodyScreen> {
                   if (bf != null)
                     Text(
                       '${bf.toStringAsFixed(1)}%',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: kPink,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -1611,14 +1608,14 @@ class _BodyScreenState extends State<BodyScreen> {
             const SizedBox(height: 8),
             Text(
               '+ ${strengths.join(' · ')}',
-              style: const TextStyle(color: kGreen, fontSize: 11),
+              style: TextStyle(color: kGreen, fontSize: 11),
             ),
           ],
           if (weaknesses.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               '– ${weaknesses.join(' · ')}',
-              style: const TextStyle(color: kPink, fontSize: 11),
+              style: TextStyle(color: kPink, fontSize: 11),
             ),
           ],
         ],

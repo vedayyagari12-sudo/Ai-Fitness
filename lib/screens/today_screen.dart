@@ -732,7 +732,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 }),
           builder: (ctx, snap) {
             if (!snap.hasData) {
-              return const Center(
+              return Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
                   child: CircularProgressIndicator(color: kLime),

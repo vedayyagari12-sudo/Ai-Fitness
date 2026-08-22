@@ -462,11 +462,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                   color: kCyan.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.bedtime_rounded,
-                  size: 38,
-                  color: kCyan,
-                ),
+                child: Icon(Icons.bedtime_rounded, size: 38, color: kCyan),
               ),
               const SizedBox(height: 14),
               Container(
@@ -478,7 +474,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                   color: kCyan.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
+                child: Text(
                   'SCHEDULED RECOVERY',
                   style: TextStyle(
                     color: kCyan,
@@ -523,7 +519,7 @@ class _AiSessionViewState extends State<AiSessionView> {
             },
             style: OutlinedButton.styleFrom(
               foregroundColor: kCyan,
-              side: const BorderSide(color: kCyan),
+              side: BorderSide(color: kCyan),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -583,11 +579,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                         width: 2,
                       ),
                     ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 44,
-                      color: kLime,
-                    ),
+                    child: Icon(Icons.check_rounded, size: 44, color: kLime),
                   )
                   .animate()
                   .scale(
@@ -874,7 +866,7 @@ class _AiSessionViewState extends State<AiSessionView> {
                     children: [
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.auto_awesome_rounded,
                             size: 14,
                             color: kCyan,
@@ -1061,7 +1053,7 @@ class _AiSessionViewState extends State<AiSessionView> {
         color: kPink.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: const Text(
+      child: Text(
         'FOCUS',
         style: TextStyle(
           color: kPink,
@@ -1158,7 +1150,7 @@ class _AiSessionViewState extends State<AiSessionView> {
               _completedCount == mainExercises.length
                   ? 'Clear all'
                   : 'Select all',
-              style: const TextStyle(
+              style: TextStyle(
                 color: kCyan,
                 fontSize: 14,
                 fontWeight: FontWeight.w800,

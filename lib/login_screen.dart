@@ -517,7 +517,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               _resendCooldown > 0
                                   ? 'Resend in ${_resendCooldown}s'
                                   : 'Resend verification email',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.accent,
                                 fontWeight: FontWeight.w700,
                               ),

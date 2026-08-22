@@ -392,7 +392,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
               children: [
                 Text(
                   (vol as num).toStringAsFixed(0),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.accentCyan,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,

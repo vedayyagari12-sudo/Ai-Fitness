@@ -16,14 +16,60 @@ Color get kBgElevated => AppColors.surfaceElevated;
 Color get kBgHighlight => AppColors.surfaceHighlight;
 // "kLime" name kept (it's referenced ~25 places as the TODAY/primary accent)
 // but the value is now Spotify green, not lime.
-const kLime = Color(0xFF1ED760);
-const kBlue = Color(0xFF1CA7F0);
-const kCyan = Color(0xFF00C4D4);
-const kPink = Color(0xFFFF3B79);
-const kGold = Color(0xFFFFD23F);
-const kPurple = Color(0xFF8B5CF6);
-const kGreen = Color(0xFF34D399);
-const kOrange = Color(0xFFFF8C00);
+//
+// ── Why these are per-theme rather than one fixed hex ────────────────────────
+// The accents were picked against a light canvas and never re-stepped for the
+// near-black one the app actually ships. Measured in OKLCH they sat at
+// lightness 0.75-0.88 against a #141414 card; the readable band for a dark
+// surface is 0.48-0.67. That gap is what made them glare and bloom on OLED —
+// kGold was the worst at L 0.88 / 12.8:1. On white they had the opposite
+// problem: #1ED760 is 1.8:1 there, far under the 4.5:1 text floor.
+//
+// Two tiers, because a 12px label and a 90px bar do different jobs:
+//   · these `k*` tokens  — icons, labels, small marks, borders. Gate is WCAG
+//     text contrast (>=4.5:1) on the active surface. Lightness capped at 0.72
+//     in dark so they stop haloing while staying vivid.
+//   · [ChartFill]        — bar/donut/ring bodies. Gate is the full six-check
+//     colour-vision standard, all-pairs, per group of colours that share one
+//     chart. Deeper, because large areas of saturated colour are what actually
+//     vibrate against black.
+// Every value below was solved with a validator, not eyeballed; the guards in
+// test/palette_test.dart re-check them so they cannot drift back out of band.
+Color get kLime => _kDark ? const Color(0xFF00C252) : const Color(0xFF008938);
+Color get kBlue => _kDark ? const Color(0xFF1CA7F0) : const Color(0xFF007CB7);
+Color get kCyan => _kDark ? const Color(0xFF00B7C6) : const Color(0xFF00828D);
+Color get kPink => _kDark ? const Color(0xFFFF3B79) : const Color(0xFFE70063);
+Color get kGold => _kDark ? const Color(0xFFC39D00) : const Color(0xFF8F7200);
+Color get kPurple => _kDark ? const Color(0xFF9569FF) : const Color(0xFF8A4FFF);
+Color get kGreen => _kDark ? const Color(0xFF00BE86) : const Color(0xFF00865D);
+Color get kOrange => _kDark ? const Color(0xFFED8200) : const Color(0xFFB36000);
+
+/// Chart-fill steps of the same eight hues — see the note above.
+///
+/// Solved so that every group of colours which shares a single chart clears
+/// the all-pairs colour-vision floor: readiness rings (lime/cyan/pink),
+/// calorie-status bars (green/gold/pink) and the macro donut
+/// (lime/blue/orange). Worst pair in dark is deltaE 10.0, in light 10.6.
+class ChartFill {
+  ChartFill._();
+  static Color get lime =>
+      _kDark ? const Color(0xFF00B04A) : const Color(0xFF00AC48);
+  static Color get blue =>
+      _kDark ? const Color(0xFF006DA1) : const Color(0xFF006799);
+  static Color get cyan =>
+      _kDark ? const Color(0xFF00A5B3) : const Color(0xFF00A2AF);
+  static Color get pink =>
+      _kDark ? const Color(0xFFCB0057) : const Color(0xFFB2004B);
+  static Color get gold =>
+      _kDark ? const Color(0xFFA38200) : const Color(0xFF957700);
+  static Color get purple =>
+      _kDark ? const Color(0xFF812CFF) : const Color(0xFF7D0BFF);
+  static Color get green =>
+      _kDark ? const Color(0xFF00AC79) : const Color(0xFF00A976);
+  static Color get orange =>
+      _kDark ? const Color(0xFF9C5300) : const Color(0xFF944F00);
+}
+
 // Cool bluish-white used for the hero-card lift and page backdrop — the
 // WHOOP-style "bluish white into black" look. Deliberately NOT an accent
 // (no green tint anywhere in the chrome).
@@ -49,6 +95,47 @@ Color get kFillMuted => _kDark
 Color get kGridline => _kDark
     ? Colors.white.withValues(alpha: 0.05)
     : _kInk.withValues(alpha: 0.07);
+
+// ── Chart surfaces ───────────────────────────────────────────────────────────
+// Three problems these fix, all measured against the #141414 card:
+//  · bars floated with nothing behind them, so a chart read as scattered marks
+//    rather than a set of meters;
+//  · the "nothing logged that day" stub used kBgHighlight (#262629) at 1.23:1
+//    — invisible, so an unlogged day looked identical to a missing one;
+//  · kGridline (white @5%) vanishes entirely on this card.
+
+/// Faint slot a bar sits in, so a chart reads as a set of meters.
+Color get kChartTrack => _kDark
+    ? Colors.white.withValues(alpha: 0.07)
+    : _kInk.withValues(alpha: 0.06);
+
+/// A deliberate "no data here" mark. Must read as a mark, not as the track —
+/// an unlogged day is information, not absence of a bar.
+Color get kChartEmpty => _kDark
+    ? Colors.white.withValues(alpha: 0.22)
+    : _kInk.withValues(alpha: 0.20);
+
+/// Gridlines inside a chart, one step up from [kGridline] which is tuned for
+/// dividers on the page rather than on a card.
+Color get kChartGrid => _kDark
+    ? Colors.white.withValues(alpha: 0.09)
+    : _kInk.withValues(alpha: 0.08);
+
+/// A de-emphasised member of a series — the older weeks sitting behind the
+/// latest one.
+///
+/// Blended toward a mid grey, NOT toward the card. Fading a colour into the
+/// surface is the obvious move and the wrong one: it removes exactly the
+/// lightness difference that made the bar visible. The charts used to do this
+/// with `withValues(alpha: 0.45)` and the older bars measured 1.8:1 (strength,
+/// purple) and 2.7:1 (volume, cyan) — present in the widget tree, invisible on
+/// screen. Pulling chroma out against a neutral instead drops the emphasis
+/// without dropping the contrast: the same bars now land between 3.4 and 5.5:1.
+Color chartMuted(Color c) => Color.lerp(
+  c,
+  _kDark ? const Color(0xFF8A8A8A) : const Color(0xFF6E7480),
+  0.6,
+)!;
 
 // ── Body map ─────────────────────────────────────────────────────────────────
 // Unscored regions and the never-scored head/neck. The contour stroke is what
@@ -164,10 +251,12 @@ TextStyle get kStatCaption => GoogleFonts.inter(
   fontWeight: FontWeight.w600,
   color: kTextSecondary,
 );
+// kTextMuted here measured 2.6:1 on a #141414 card — below the readable
+// floor, which is why axis labels looked like they were fading out.
 TextStyle get kAxisLabel => GoogleFonts.inter(
   fontSize: 12,
   fontWeight: FontWeight.w600,
-  color: kTextMuted,
+  color: kTextSecondary,
 );
 
 TextStyle get kDisplayLarge => GoogleFonts.inter(
@@ -246,8 +335,10 @@ class AppColors {
   static Color get border =>
       _l ? const Color(0x14000000) : const Color(0xFF242424);
 
-  // ── Accents (identical in both themes — stay const) ────────────────────────
-  static const Color accent = kBlue; // signature blue accent
+  // ── Accents ───────────────────────────────────────────────────────────────
+  // The eight that alias a k* token follow the theme with it (see the note on
+  // those tokens); the standalone hexes below stay const.
+  static Color get accent => kBlue; // signature blue accent
   static const Color accentMuted = Color(0xFF0E7CB8);
   static const Color accentSecondary = Color(0xFFFF3B30); // red — warnings/weak
   static const Color accentTertiary = Color(
@@ -256,13 +347,13 @@ class AppColors {
   static const Color accentViolet = Color(
     0xFF8B5CF6,
   ); // violet — variety series
-  static const Color accentCyan = kCyan;
-  static const Color accentLime = kLime;
-  static const Color accentPink = kPink;
-  static const Color accentGreen = kGreen;
-  static const Color accentOrange = kOrange;
-  static const Color accentPurple = kPurple;
-  static const Color accentYellow = kGold;
+  static Color get accentCyan => kCyan;
+  static Color get accentLime => kLime;
+  static Color get accentPink => kPink;
+  static Color get accentGreen => kGreen;
+  static Color get accentOrange => kOrange;
+  static Color get accentPurple => kPurple;
+  static Color get accentYellow => kGold;
   static const Color success = Color(0xFF30D158);
   static const Color error = Color(0xFFFF3B30);
   static const Color danger = Color(0xFFFF3B30);
@@ -424,7 +515,7 @@ class AppTheme {
         enabledBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: border),
         ),
-        focusedBorder: const UnderlineInputBorder(
+        focusedBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: AppColors.accent, width: 1.5),
         ),
         errorBorder: const UnderlineInputBorder(

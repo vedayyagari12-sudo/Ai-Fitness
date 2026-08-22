@@ -405,9 +405,7 @@ class OnboardingScaffold extends StatelessWidget {
                     value: currentStep! / totalSteps!,
                     minHeight: 4,
                     backgroundColor: AppColors.border,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.accent,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
                   ),
                 ),
               ),
@@ -935,14 +933,16 @@ class FeatureHubTile extends StatefulWidget {
     required this.subtitle,
     required this.icon,
     required this.onTap,
-    this.accentColor = AppColors.accent,
+    this.accentColor,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
-  final Color accentColor;
+
+  /// Null means the app accent, resolved at build so it follows the theme.
+  final Color? accentColor;
 
   @override
   State<FeatureHubTile> createState() => _FeatureHubTileState();
@@ -951,6 +951,8 @@ class FeatureHubTile extends StatefulWidget {
 class _FeatureHubTileState extends State<FeatureHubTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+
+  Color get _accent => widget.accentColor ?? AppColors.accent;
 
   @override
   void initState() {
@@ -985,7 +987,7 @@ class _FeatureHubTileState extends State<FeatureHubTile>
           ),
           boxShadow: [
             BoxShadow(
-              color: widget.accentColor.withValues(alpha: 0.03),
+              color: _accent.withValues(alpha: 0.03),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -1036,17 +1038,17 @@ class _FeatureHubTileState extends State<FeatureHubTile>
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: widget.accentColor.withValues(alpha: 0.15),
+                          color: _accent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: widget.accentColor.withValues(alpha: 0.1),
+                              color: _accent.withValues(alpha: 0.1),
                               blurRadius: 10,
                               spreadRadius: 1,
                             ),
                           ],
                         ),
-                        child: Icon(widget.icon, color: widget.accentColor),
+                        child: Icon(widget.icon, color: _accent),
                       ),
                       const SizedBox(width: 16),
                       Expanded(

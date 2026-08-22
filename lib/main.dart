@@ -329,7 +329,7 @@ class _MainScreenState extends State<MainScreen> {
 
   // Each tab owns an accent colour (matches the reference design):
   // TODAY lime · SCAN blue · BODY pink · TRAIN cyan.
-  static const tabAccents = [kLime, kBlue, kPink, kCyan];
+  static List<Color> get tabAccents => [kLime, kBlue, kPink, kCyan];
 
   @override
   Widget build(BuildContext context) {

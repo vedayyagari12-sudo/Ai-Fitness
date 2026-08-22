@@ -95,7 +95,7 @@ class PhysiqueMiniCard extends StatelessWidget {
                 children: [
                   Text(
                     '${bodyFat!.toStringAsFixed(1)}%',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w800,
                       color: kPink,
@@ -117,7 +117,7 @@ class PhysiqueMiniCard extends StatelessWidget {
               const SizedBox(height: 3),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, size: 14, color: kLime),
+                  Icon(Icons.star_rounded, size: 14, color: kLime),
                   const SizedBox(width: 3),
                   // Scaled rather than ellipsised — "Score 55…" hides the
                   // number, which is the whole point of the line.
@@ -128,7 +128,7 @@ class PhysiqueMiniCard extends StatelessWidget {
                       child: Text(
                         'Score $score/100',
                         maxLines: 1,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: kLime,

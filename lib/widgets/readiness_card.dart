@@ -75,7 +75,7 @@ class ReadinessCard extends StatelessWidget {
                         style: kStatXLarge.copyWith(fontSize: 52),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
+                      Text(
                         'READY',
                         style: TextStyle(
                           fontSize: 11,

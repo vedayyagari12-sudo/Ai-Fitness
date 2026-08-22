@@ -353,7 +353,7 @@ class _WelcomeStepState extends State<_WelcomeStep>
                                   ),
                                 ],
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.fitness_center,
                                 size: 44,
                                 color: AppColors.accent,
@@ -938,7 +938,7 @@ class _InitialPhysiqueScanStepState extends State<_InitialPhysiqueScanStep> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
+                Icon(
                   Icons.security_outlined,
                   color: AppColors.accent,
                   size: 22,

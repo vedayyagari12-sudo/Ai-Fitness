@@ -90,7 +90,7 @@ class TodaySessionCard extends StatelessWidget {
         const SizedBox(height: 6),
         Row(
           children: [
-            const Icon(Icons.check_circle_rounded, size: 18, color: kLime),
+            Icon(Icons.check_circle_rounded, size: 18, color: kLime),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
