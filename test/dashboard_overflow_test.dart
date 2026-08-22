@@ -1,4 +1,5 @@
 import 'package:physiqo_ai/models/readiness_data.dart';
+import 'package:physiqo_ai/widgets/fuel_card.dart';
 import 'package:physiqo_ai/widgets/physique_mini_card.dart';
 import 'package:physiqo_ai/widgets/readiness_card.dart';
 import 'package:physiqo_ai/widgets/today_session_card.dart';
@@ -103,6 +104,8 @@ void main() {
       meta: '~45 min · AI generated',
       note: 'Tuned to your physique scan',
     ),
+    // Worst case is three digits in every legend row at once.
+    'FuelCard': () => const FuelCard(proteinG: 245, carbsG: 512, fatG: 180),
   };
 
   cards.forEach((name, build) {
@@ -181,6 +184,11 @@ void main() {
       meta: '~45 min · AI generated',
       note: '',
     ),
+    'FuelCard': () => const FuelCard(proteinG: 0, carbsG: 0, fatG: 0),
+    // A logged meal that came back with only protein — common enough, and it
+    // takes the populated path with two zero-valued slices.
+    'FuelCard (protein only)': () =>
+        const FuelCard(proteinG: 40, carbsG: 0, fatG: 0),
   };
 
   emptyCards.forEach((name, build) {

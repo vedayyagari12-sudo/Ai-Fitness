@@ -13,6 +13,7 @@ import '../theme/app_widgets.dart';
 import '../theme/theme_controller.dart';
 import '../utils/strength_trend.dart';
 import '../utils/units.dart';
+import '../widgets/fuel_card.dart';
 import '../widgets/physique_mini_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/recent_scan_thumb.dart';
@@ -342,6 +343,16 @@ class _TodayScreenState extends State<TodayScreen> {
         weeklyVolume: _weeklyVolume,
         weeklyStrength: _strengthTrend.weekly,
         strengthExercise: _strengthTrend.exercise,
+      ),
+      const SizedBox(height: 12),
+      // Sits below the trends card rather than inside its CALORIES tab: that
+      // card is titled YOUR TRENDS and every tab in it is a time series,
+      // whereas this is a snapshot of one day.
+      FuelCard(
+        proteinG: _num(_stats['protein']),
+        carbsG: _num(_stats['carbs']),
+        fatG: _num(_stats['fat']),
+        goal: _goal,
       ),
       const SizedBox(height: 12),
       // IntrinsicHeight + stretch: the two cards hold different amounts of
