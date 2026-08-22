@@ -63,12 +63,22 @@ class _TrendCardState extends State<TrendCard> {
     return (label: 'MAINTAIN', color: kCyan);
   }
 
+  /// The hue of whichever tab is open. Each chart already has an identity —
+  /// volume is cyan, strength purple — so letting the card carry it makes the
+  /// tab you are on legible from the colour alone.
+  Color get _tabAccent => switch (_selected) {
+    1 => kBlue,
+    2 => kCyan,
+    3 => kPurple,
+    _ => kLime,
+  };
+
   @override
   Widget build(BuildContext context) {
     final badge = _goalBadge;
     return Container(
       decoration: BoxDecoration(
-        gradient: kHeroCardGradient(kSteel),
+        gradient: kHeroCardGradient(_tabAccent),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: kGlassBorder),
         boxShadow: kGlassShadow,
@@ -136,7 +146,7 @@ class _TrendCardState extends State<TrendCard> {
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   padding: const EdgeInsets.symmetric(vertical: 9),
                   decoration: BoxDecoration(
-                    color: _selected == i ? kBlue : Colors.transparent,
+                    color: _selected == i ? _tabAccent : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: FittedBox(
@@ -149,7 +159,16 @@ class _TrendCardState extends State<TrendCard> {
                         fontSize: 9.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.2,
-                        color: _selected == i ? Colors.white : kTextMuted,
+                        // Accents are light in dark mode, so white-on-accent
+                        // would be unreadable; pick the ink against the pill.
+                        color: _selected == i
+                            ? (ThemeData.estimateBrightnessForColor(
+                                        _tabAccent,
+                                      ) ==
+                                      Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black)
+                            : kTextSecondary,
                       ),
                     ),
                   ),
@@ -217,6 +236,44 @@ class _TrendCardState extends State<TrendCard> {
   static TextStyle get _valueLabelStyle =>
       TextStyle(color: kTextPrimary, fontSize: 13, fontWeight: FontWeight.w800);
 
+  /// One bar, styled the same way in all three bar charts.
+  ///
+  /// [trackTo] is the tallest real value, NOT maxY: maxY carries
+  /// [_labelHeadroom] above the data so the value labels have somewhere to
+  /// sit, and a track drawn to it would stand ~22% proud of every bar and
+  /// read as though each one were failing a target.
+  BarChartRodData _rod({
+    required double toY,
+    required Color colour,
+    required double width,
+    required double trackTo,
+    bool flat = false,
+  }) {
+    return BarChartRodData(
+      toY: toY,
+      width: width,
+      borderRadius: BorderRadius.circular(width * 0.34),
+      // A gradient rather than a flat block: large areas of saturated colour
+      // sit heavy on a near-black card.
+      gradient: flat
+          ? null
+          : LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [colour.withValues(alpha: 0.62), colour],
+            ),
+      color: flat ? colour : null,
+      // The slot the bar sits in. Without it the bars float as scattered
+      // marks; with it the chart reads as a set of meters, and a short bar
+      // reads as short rather than as missing.
+      backDrawRodData: BackgroundBarChartRodData(
+        show: true,
+        toY: trackTo,
+        color: kChartTrack,
+      ),
+    );
+  }
+
   // ── CALORIES ────────────────────────────────────────────────────────────
 
   Widget _caloriesView() {
@@ -281,13 +338,13 @@ class _TrendCardState extends State<TrendCard> {
           alignment: Alignment.centerLeft,
           child: Row(
             children: [
-              _legendDot(kGreen, 'On target'),
+              _legendDot(ChartFill.green, 'On target'),
               const SizedBox(width: 10),
-              _legendDot(kGold, 'Close'),
+              _legendDot(ChartFill.gold, 'Close'),
               const SizedBox(width: 10),
-              _legendDot(kPink, 'Off target'),
+              _legendDot(ChartFill.pink, 'Off target'),
               const SizedBox(width: 10),
-              _legendDot(kBgHighlight, 'Not logged'),
+              _legendDot(kChartEmpty, 'Not logged'),
             ],
           ),
         ),
@@ -297,11 +354,13 @@ class _TrendCardState extends State<TrendCard> {
 
   Color _dayColor(double cal) {
     final target = widget.calorieTarget;
-    if (cal <= 0 || target <= 0) return kBgHighlight;
+    // kChartEmpty, not kBgHighlight: that measured 1.23:1 on the card, so an
+    // unlogged day was indistinguishable from no bar at all.
+    if (cal <= 0 || target <= 0) return kChartEmpty;
     final off = (cal - target).abs() / target;
-    if (off <= 0.10) return kGreen;
-    if (off <= 0.20) return kGold;
-    return kPink;
+    if (off <= 0.10) return ChartFill.green;
+    if (off <= 0.20) return ChartFill.gold;
+    return ChartFill.pink;
   }
 
   BarChartData _calorieBars(double width) {
@@ -331,9 +390,9 @@ class _TrendCardState extends State<TrendCard> {
             final logged = cals[group.x] > 0;
             return BarTooltipItem(
               logged ? _compact(cals[group.x]) : '—',
-              _valueLabelStyle.copyWith(
-                color: logged ? _dayColor(cals[group.x]) : kTextMuted,
-              ),
+              logged
+                  ? _valueLabelStyle
+                  : _valueLabelStyle.copyWith(color: kTextMuted),
             );
           },
         ),
@@ -369,10 +428,12 @@ class _TrendCardState extends State<TrendCard> {
       extraLinesData: ExtraLinesData(
         horizontalLines: [
           if (target > 0)
+            // Dashed and in the accent: this is a threshold, which is the
+            // one thing a dashed rule should mean.
             HorizontalLine(
               y: target,
-              color: kTextSecondary,
-              strokeWidth: 1,
+              color: kGold.withValues(alpha: 0.65),
+              strokeWidth: 1.5,
               dashArray: [5, 4],
             ),
         ],
@@ -385,15 +446,14 @@ class _TrendCardState extends State<TrendCard> {
                 ? const [0]
                 : const [],
             barRods: [
-              BarChartRodData(
-                // A visible grey stub marks "not logged" so it reads
-                // differently from an actual low-calorie day.
+              _rod(
+                // A visible stub marks "not logged" so it reads differently
+                // from an actual low-calorie day.
                 toY: cals[i] > 0 ? cals[i] : maxVal * 0.04,
+                colour: _dayColor(cals[i]),
                 width: 16,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(4),
-                ),
-                color: _dayColor(cals[i]),
+                trackTo: maxVal,
+                flat: cals[i] <= 0,
               ),
             ],
           ),
@@ -533,7 +593,7 @@ class _TrendCardState extends State<TrendCard> {
         drawVerticalLine: false,
         horizontalInterval: yr.interval(),
         getDrawingHorizontalLine: (v) =>
-            FlLine(color: kGridline, strokeWidth: 1),
+            FlLine(color: kChartGrid, strokeWidth: 1),
       ),
       titlesData: const FlTitlesData(show: false),
       borderData: FlBorderData(show: false),
@@ -546,10 +606,7 @@ class _TrendCardState extends State<TrendCard> {
           tooltipMargin: 4,
           getTooltipItems: (spots) => [
             for (final s in spots)
-              LineTooltipItem(
-                lbsLabel(s.y),
-                _valueLabelStyle.copyWith(color: color),
-              ),
+              LineTooltipItem(lbsLabel(s.y), _valueLabelStyle),
           ],
         ),
       ),
@@ -570,11 +627,33 @@ class _TrendCardState extends State<TrendCard> {
       preventCurveOverShooting: true,
       color: color,
       barWidth: 2.5,
-      dotData: const FlDotData(show: true),
+      dotData: FlDotData(
+        show: true,
+        // Only the latest reading is marked. A dot on every point turned a
+        // 90-day history into a dotted band rather than a line, and the one
+        // value the card is actually about was lost among them.
+        checkToShowDot: (spot, bar) =>
+            bar.spots.isNotEmpty && spot.x == bar.spots.last.x,
+        getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
+          radius: 4,
+          color: color,
+          // A ring of surface rather than a stroke, so the dot stays legible
+          // where it sits on top of the line.
+          strokeWidth: 2,
+          strokeColor: kBgCard,
+        ),
+      ),
       belowBarData: BarAreaData(
         show: true,
         gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.18), Colors.transparent],
+          // An 18% wash was almost nothing against a #141414 card. The extra
+          // stop keeps the falloff smooth rather than banding.
+          colors: [
+            color.withValues(alpha: 0.30),
+            color.withValues(alpha: 0.08),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.55, 1.0],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -715,17 +794,17 @@ class _TrendCardState extends State<TrendCard> {
                 ? const [0]
                 : const [],
             barRods: [
-              BarChartRodData(
+              _rod(
                 toY: vols[i] > 0 ? vols[i] : maxVal * 0.03,
+                // Emphasis: this week in the accent, history receding to a
+                // neutral. chartMuted rather than a low alpha — fading toward
+                // the card measured 2.7:1 and those bars vanished.
+                colour: i == vols.length - 1
+                    ? ChartFill.cyan
+                    : (vols[i] > 0 ? chartMuted(ChartFill.cyan) : kChartEmpty),
                 width: 14,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(4),
-                ),
-                color: i == vols.length - 1
-                    ? kCyan
-                    : (vols[i] > 0
-                          ? kCyan.withValues(alpha: 0.45)
-                          : kBgHighlight),
+                trackTo: maxVal,
+                flat: vols[i] <= 0,
               ),
             ],
           ),
@@ -887,17 +966,16 @@ class _TrendCardState extends State<TrendCard> {
                 ? const [0]
                 : const [],
             barRods: [
-              BarChartRodData(
+              _rod(
                 toY: str[i] > 0 ? str[i] : maxVal * 0.03,
+                // Same emphasis rule as volume. Purple at alpha 0.45 was the
+                // worst case in the app at 1.8:1 — effectively invisible.
+                colour: i == str.length - 1
+                    ? ChartFill.purple
+                    : (str[i] > 0 ? chartMuted(ChartFill.purple) : kChartEmpty),
                 width: 14,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(4),
-                ),
-                color: i == str.length - 1
-                    ? kPurple
-                    : (str[i] > 0
-                          ? kPurple.withValues(alpha: 0.45)
-                          : kBgHighlight),
+                trackTo: maxVal,
+                flat: str[i] <= 0,
               ),
             ],
           ),
