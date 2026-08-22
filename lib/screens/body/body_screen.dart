@@ -13,6 +13,7 @@ import '../../utils/muscle_focus.dart';
 import '../../utils/units.dart';
 import '../../utils/weight_validation.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/muscle_radar.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
 import '../workouts/segmented_bar.dart';
@@ -732,11 +733,42 @@ class _BodyScreenState extends State<BodyScreen> {
                 style: TextStyle(color: AppColors.textMuted, fontSize: 13),
               ),
             )
-          else
+          else ...[
+            // The web shows the shape of the imbalance; the rows below are its
+            // table view, carrying the exact numbers and the focus flags a
+            // shape cannot. Below three muscles there is no shape to draw and
+            // the radar renders nothing, leaving the rows on their own.
+            if (scores.length >= MuscleRadar.minAxes) ...[
+              SizedBox(
+                height: 236,
+                child: MuscleRadar(
+                  readings: [
+                    for (final m in scores)
+                      (label: _radarLabel(m.name), score: m.score),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
             ...scores.map(_muscleRow),
+          ],
         ],
       ),
     );
+  }
+
+  /// Axis labels have far less room than the rows below them, so the longest
+  /// names get a short form rather than being ellipsised into nothing.
+  static String _radarLabel(String name) {
+    const short = {
+      'shoulders': 'Delts',
+      'hamstrings': 'Hams',
+      'quadriceps': 'Quads',
+      'mid back': 'Mid back',
+      'lower back': 'Low back',
+      'glutes': 'Glutes',
+    };
+    return short[name.toLowerCase()] ?? name;
   }
 
   Widget _muscleRow(_MuscleScore m) {
