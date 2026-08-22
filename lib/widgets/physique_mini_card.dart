@@ -308,7 +308,12 @@ class PhysiqueMiniCard extends StatelessWidget {
           belowBarData: BarAreaData(
             show: true,
             gradient: LinearGradient(
-              colors: [kPink.withValues(alpha: 0.25), Colors.transparent],
+              colors: [
+                kPink.withValues(alpha: 0.32),
+                kPink.withValues(alpha: 0.08),
+                Colors.transparent,
+              ],
+              stops: const [0.0, 0.55, 1.0],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),

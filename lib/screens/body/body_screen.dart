@@ -1316,7 +1316,7 @@ class _BodyScreenState extends State<BodyScreen> {
               drawVerticalLine: false,
               horizontalInterval: yr.interval(),
               getDrawingHorizontalLine: (v) =>
-                  FlLine(color: kGridline, strokeWidth: 1),
+                  FlLine(color: kChartGrid, strokeWidth: 1),
             ),
             titlesData: const FlTitlesData(show: false),
             borderData: FlBorderData(show: false),
@@ -1359,11 +1359,29 @@ class _BodyScreenState extends State<BodyScreen> {
       preventCurveOverShooting: true,
       color: color,
       barWidth: 2.5,
-      dotData: const FlDotData(show: true),
+      dotData: FlDotData(
+        show: true,
+        // Only the newest reading. Thirty weigh-ins with a dot each read as
+        // a dotted band rather than a trend.
+        checkToShowDot: (spot, bar) =>
+            bar.spots.isNotEmpty && spot.x == bar.spots.last.x,
+        getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
+          radius: 4,
+          color: color,
+          strokeWidth: 2,
+          strokeColor: kBgCard,
+        ),
+      ),
       belowBarData: BarAreaData(
         show: true,
         gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.20), Colors.transparent],
+          // A 20% wash was almost nothing against the card.
+          colors: [
+            color.withValues(alpha: 0.30),
+            color.withValues(alpha: 0.08),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.55, 1.0],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -1428,12 +1446,29 @@ class _BodyScreenState extends State<BodyScreen> {
                     BarChartRodData(
                       toY: series[i].$2,
                       width: barWidth,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(4),
+                      borderRadius: BorderRadius.circular(barWidth * 0.34),
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          (i == series.length - 1
+                                  ? ChartFill.lime
+                                  : chartMuted(ChartFill.lime))
+                              .withValues(alpha: 0.62),
+                          i == series.length - 1
+                              ? ChartFill.lime
+                              : chartMuted(ChartFill.lime),
+                        ],
                       ),
-                      color: i == series.length - 1
-                          ? kLime
-                          : kLime.withValues(alpha: 0.4),
+                      // Earlier scans were drawn at alpha 0.4, which sinks
+                      // into the card; the grey de-emphasis recedes without
+                      // disappearing. The track gives each scan a slot so a
+                      // low score reads as low rather than as missing.
+                      backDrawRodData: BackgroundBarChartRodData(
+                        show: true,
+                        toY: maxVal,
+                        color: kChartTrack,
+                      ),
                     ),
                   ],
                 ),
