@@ -746,7 +746,7 @@ class _TodayScreenState extends State<TodayScreen> {
               return Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(color: kLime),
+                  child: CircularProgressIndicator(color: kBrand),
                 ),
               );
             }

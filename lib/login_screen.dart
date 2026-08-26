@@ -669,7 +669,7 @@ class VerificationPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(Icons.mark_email_unread_outlined, size: 48, color: kLime),
+        Icon(Icons.mark_email_unread_outlined, size: 48, color: kBrand),
         const SizedBox(height: 16),
         Text(
           'Check your email to verify your account before logging in',

@@ -274,6 +274,59 @@ void main() {
     });
   }
 
+  group('the tab accents read as one family', () {
+    // Seven accents appeared on a single screen and each tab repainted the
+    // chrome from a 232-degree spread of the wheel, which is what made the
+    // app look busy rather than designed.
+    List<Color> tabs() => [kBrand, kTabScan, kTabBody, kTabTrain];
+
+    /// OKLCH hue, degrees.
+    double hueOf(Color c) {
+      final lab = oklabOf(linearRgb(c));
+      final h = math.atan2(lab[2], lab[1]) * 180 / math.pi;
+      return h < 0 ? h + 360 : h;
+    }
+
+    for (final mode in [Brightness.dark, Brightness.light]) {
+      final name = mode == Brightness.dark ? 'dark' : 'light';
+
+      test('$name: every tab accent is one cool hue run', () {
+        AppColors.brightness = mode;
+        final hues = tabs().map(hueOf).toList()..sort();
+        // Teal through indigo. Anything outside this is a hue from the
+        // chart palette leaking back into the app's chrome.
+        for (final h in hues) {
+          expect(
+            h,
+            inInclusiveRange(180, 310),
+            reason: 'a tab accent at ${h.toStringAsFixed(0)}deg is not cool',
+          );
+        }
+        expect(
+          hues.last - hues.first,
+          lessThanOrEqualTo(110),
+          reason:
+              'tab accents span ${(hues.last - hues.first).toStringAsFixed(0)}'
+              'deg — that is a rainbow, not a family',
+        );
+      });
+
+      test('$name: every tab accent is readable on its own surface', () {
+        AppColors.brightness = mode;
+        for (final c in tabs()) {
+          expect(contrast(c, AppColors.surface), greaterThanOrEqualTo(4.5));
+        }
+      });
+
+      test('$name: the primary button label is readable on the brand', () {
+        // Neither black nor white clears 4.5:1 on both themes' blue, so the
+        // label colour has to flip with the theme.
+        AppColors.brightness = mode;
+        expect(contrast(kOnBrand, kBrand), greaterThanOrEqualTo(4.5));
+      });
+    }
+  });
+
   test('the two themes actually differ', () {
     AppColors.brightness = Brightness.dark;
     final darkAccents = accents();

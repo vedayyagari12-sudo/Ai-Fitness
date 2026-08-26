@@ -44,6 +44,36 @@ Color get kPurple => _kDark ? const Color(0xFF9569FF) : const Color(0xFF8A4FFF);
 Color get kGreen => _kDark ? const Color(0xFF2EBB91) : const Color(0xFF008565);
 Color get kOrange => _kDark ? const Color(0xFFED8200) : const Color(0xFFB36000);
 
+/// The app's primary accent, and the four tab accents it heads.
+///
+/// The eight `k*` hues above are a *palette* — they exist so a chart can tell
+/// series apart. They were never a UI system, and using them as one is what
+/// made the app look busy: seven different accents appeared on the calorie
+/// screen alone, and each tab repainted the chrome a different colour drawn
+/// from a 232-degree spread of the wheel (green / blue / pink / cyan).
+///
+/// These four are one hue run instead — teal, cyan, blue, indigo — at a
+/// single lightness per theme, so navigating shifts the accent without the
+/// app appearing to change identity. Deliberately NOT separated to the
+/// deltaE 8 a chart legend needs: only one tab is ever active, so they are
+/// never compared side by side, and forcing them apart would undo the
+/// cohesion that is the whole point.
+Color get kBrand => _kDark ? const Color(0xFF5AA3EC) : const Color(0xFF2A75BA);
+Color get kTabScan =>
+    _kDark ? const Color(0xFF00AFD8) : const Color(0xFF007E9C);
+Color get kTabBody =>
+    _kDark ? const Color(0xFF9592EC) : const Color(0xFF6A65BA);
+Color get kTabTrain =>
+    _kDark ? const Color(0xFF00B5B7) : const Color(0xFF008283);
+
+/// Label colour for a filled [kBrand] button.
+///
+/// Flips with the theme rather than being a fixed black: the dark-theme blue
+/// is light enough that white on it is only 2.66:1, while the light-theme
+/// blue is deep enough that black on it is 4.35:1. Neither single choice
+/// clears 4.5:1 in both.
+Color get kOnBrand => _kDark ? Colors.black : Colors.white;
+
 /// Chart-fill steps of the same eight hues — see the note above.
 ///
 /// Solved so that every group of colours which shares a single chart clears
@@ -492,8 +522,12 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accentLime,
-          foregroundColor: Colors.black,
+          backgroundColor: brightness == Brightness.dark
+              ? const Color(0xFF5AA3EC)
+              : const Color(0xFF2A75BA),
+          foregroundColor: brightness == Brightness.dark
+              ? Colors.black
+              : Colors.white,
           disabledBackgroundColor: surfaceElevated,
           disabledForegroundColor: textMuted,
           elevation: 0,

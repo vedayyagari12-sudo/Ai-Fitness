@@ -329,7 +329,11 @@ class _MainScreenState extends State<MainScreen> {
 
   // Each tab owns an accent colour (matches the reference design):
   // TODAY lime · SCAN blue · BODY pink · TRAIN cyan.
-  static List<Color> get tabAccents => [kLime, kBlue, kPink, kCyan];
+  /// One cool hue run — blue, cyan, indigo, teal — rather than four
+  /// unrelated hues. The old set (green / blue / pink / cyan) spanned 232
+  /// degrees of the wheel, so every tab change repainted the chrome a
+  /// visibly different colour and the app read as four different products.
+  static List<Color> get tabAccents => [kBrand, kTabScan, kTabBody, kTabTrain];
 
   @override
   Widget build(BuildContext context) {
