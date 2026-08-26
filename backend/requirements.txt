@@ -1,10 +1,31 @@
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-python-dotenv
-google-generativeai
-python-multipart
-pydantic
+# Pinned so a rebuild months from now installs what was tested, not whatever
+# is newest that day. Versions below match the local environment where they
+# could be read from it; the three that are not installed locally
+# (google-generativeai, python-multipart, PyJWT) take the current stable
+# release.
+#
+# Every entry here is imported somewhere in this package, or is required at
+# runtime by something that is:
+#   fastapi              main.py
+#   uvicorn              the ASGI server; not imported, it imports us
+#   sqlalchemy           database.py, models.py
+#   psycopg2-binary      the postgres driver SQLAlchemy loads for postgresql://
+#   python-dotenv        database.py (load_dotenv)
+#   google-generativeai  main.py (google.generativeai)
+#   python-multipart     required by FastAPI to parse the UploadFile endpoints
+#                        at main.py:1163 and main.py:1249 - it is never
+#                        imported by name, so it looks unused and is not
+#   pydantic             schemas.py
+#   PyJWT[crypto]        main.py (jwt); [crypto] pulls cryptography, which the
+#                        RS256 JWKS verification needs
+#   httpx                main.py (all Supabase REST calls)
+fastapi==0.135.2
+uvicorn==0.42.0
+sqlalchemy==2.0.46
+psycopg2-binary==2.9.11
+python-dotenv==1.2.2
+google-generativeai==0.8.6
+python-multipart==0.0.32
+pydantic==2.10.6
 PyJWT[crypto]==2.10.1
-httpx
+httpx==0.28.1

@@ -1,0 +1,34 @@
+# Secrets. This is the important line: without it the image carries the live
+# DATABASE_URL, and anyone who can pull the image has the database. Cloud Run
+# supplies these as environment variables instead.
+.env
+.env.*
+*.env
+
+# Bytecode and test caches — rebuilt on demand, and stale .pyc from a
+# different Python version is worse than absent.
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Tests do not run in the deployed image and their dependencies are not
+# installed there.
+test_*.py
+*_test.py
+
+# One-off SQL run by hand against Supabase; not used at runtime.
+supabase_migration.sql
+
+# Local virtualenvs would otherwise be copied in and shadow /opt/venv.
+venv/
+.venv/
+env/
+
+Dockerfile
+.dockerignore
+.git/
+.gitignore
+*.md
