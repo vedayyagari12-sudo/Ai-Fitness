@@ -10,6 +10,11 @@ import 'package:physiqo_ai/widgets/macro_donut.dart';
 /// while a list whose values sum to zero paints nothing at all and leaves a
 /// card that looks broken rather than empty. A day with no food logged is the
 /// ordinary first-run state, so both paths are load-bearing.
+///
+/// The ring also now grows in over ~1s on first paint (see macro_donut.dart),
+/// so every test that reads section values, the centre number, or the ring's
+/// own size settles the animation first with pumpAndSettle() — otherwise it
+/// is reading an in-between frame, not the widget's actual output.
 void main() {
   Widget host(Widget child, {double width = 320, TextScaler? scaler}) =>
       MaterialApp(
@@ -38,6 +43,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(dataOf(tester).sections, hasLength(3));
     });
@@ -53,11 +59,43 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       final v = dataOf(tester).sections.map((s) => s.value).toList();
-      expect(v[0], 400);
-      expect(v[1], 400);
-      expect(v[2], 900);
+      expect(v[0], closeTo(400, 0.01));
+      expect(v[1], closeTo(400, 0.01));
+      expect(v[2], closeTo(900, 0.01));
+    });
+
+    testWidgets('the entrance starts from nothing and grows to the split', (
+      tester,
+    ) async {
+      // The one behaviour worth pinning about the animation itself, since
+      // every other test settles past it: the very first frame must not
+      // already show the full target (there would be nothing to animate),
+      // and the settled end state must match the real data exactly.
+      await tester.pumpWidget(
+        host(
+          MacroDonut(
+            split: MacroSplit.fromGrams(proteinG: 100, carbsG: 100, fatG: 100),
+          ),
+        ),
+      );
+
+      final firstFrameTotal = dataOf(
+        tester,
+      ).sections.fold<double>(0, (a, s) => a + s.value);
+      expect(
+        firstFrameTotal,
+        lessThan(1700 * 0.5),
+        reason: 'the ring is not animating in — it opened already full',
+      );
+
+      await tester.pumpAndSettle();
+      final settledTotal = dataOf(
+        tester,
+      ).sections.fold<double>(0, (a, s) => a + s.value);
+      expect(settledTotal, closeTo(1700, 0.01));
     });
 
     testWidgets('an empty day still yields a positive-valued section', (
@@ -72,6 +110,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       final sections = dataOf(tester).sections;
       expect(sections, isNotEmpty, reason: 'sumValue reduces over this list');
@@ -83,6 +122,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets(
+      'an empty day stays a flat placeholder through the whole animation',
+      (tester) async {
+        // isEmpty must key off the real data, not the animation clock — a
+        // moving `t` must never flip which branch this takes.
+        await tester.pumpWidget(
+          host(
+            MacroDonut(
+              split: MacroSplit.fromGrams(proteinG: 0, carbsG: 0, fatG: 0),
+            ),
+          ),
+        );
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 150));
+          expect(dataOf(tester).sections, hasLength(1));
+          expect(dataOf(tester).sections.single.value, 1);
+        }
+      },
+    );
+
     testWidgets('the centre radius is finite', (tester) async {
       // Left at its default of infinity, fl_chart derives one by reducing
       // over the sections — the same unguarded reduce again.
@@ -93,6 +152,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(dataOf(tester).centerSpaceRadius.isFinite, isTrue);
     });
@@ -106,6 +166,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(dataOf(tester).pieTouchData.enabled, isFalse);
     });
@@ -123,6 +184,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       final sections = dataOf(tester).sections;
       expect(sections, hasLength(3));
@@ -144,6 +206,7 @@ void main() {
             ),
           ),
         );
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: 'grams were $bad');
         expect(
           dataOf(tester).sections.fold<double>(0, (a, s) => a + s.value),
@@ -153,25 +216,84 @@ void main() {
     });
   });
 
+  group('the ring closes the gap beside it', () {
+    // The donut used to share a Row with a legend column beside it and was
+    // pinned to a fixed 116dp regardless of card width, so any phone wider
+    // than the narrowest one left a strip of untouched card down the side.
+    // It is centred and sized off the card's own width now.
+
+    double donutDiameter(WidgetTester tester) =>
+        tester.getSize(find.byType(MacroDonut)).width;
+
+    testWidgets('at the narrowest supported phone it holds the floor', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62), width: 320),
+      );
+      await tester.pumpAndSettle();
+      expect(donutDiameter(tester), 160.0);
+    });
+
+    testWidgets('a wider phone gets a visibly bigger ring, not a bigger gap', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62), width: 420),
+      );
+      await tester.pumpAndSettle();
+      expect(donutDiameter(tester), greaterThan(160.0));
+    });
+
+    testWidgets('growth is capped rather than unbounded', (tester) async {
+      await tester.pumpWidget(
+        host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62), width: 900),
+      );
+      await tester.pumpAndSettle();
+      expect(donutDiameter(tester), 200.0);
+    });
+
+    testWidgets('nothing sits beside the ring wide enough to be a legend', (
+      tester,
+    ) async {
+      // Regression guard for the actual bug report: the ring's own centre
+      // (where it sits horizontally) should track the card centre, not be
+      // pushed left by a column occupying the other half of the row.
+      await tester.pumpWidget(
+        host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62), width: 400),
+      );
+      await tester.pumpAndSettle();
+
+      final cardCentre = tester.getCenter(find.byType(FuelCard)).dx;
+      final donutCentre = tester.getCenter(find.byType(MacroDonut)).dx;
+      expect(donutCentre, closeTo(cardCentre, 1.0));
+    });
+  });
+
   group('the card', () {
     testWidgets('reports grams and share for all three macros', (tester) async {
       await tester.pumpWidget(
         host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62)),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('PROTEIN'), findsOneWidget);
       expect(find.text('CARBS'), findsOneWidget);
       expect(find.text('FAT'), findsOneWidget);
       // 720 / 840 / 558 kcal of 2118.
-      expect(find.text('180g · 34%'), findsOneWidget);
-      expect(find.text('210g · 40%'), findsOneWidget);
-      expect(find.text('62g · 26%'), findsOneWidget);
+      expect(find.text('180g'), findsOneWidget);
+      expect(find.text('34%'), findsOneWidget);
+      expect(find.text('210g'), findsOneWidget);
+      expect(find.text('40%'), findsOneWidget);
+      expect(find.text('62g'), findsOneWidget);
+      expect(find.text('26%'), findsOneWidget);
     });
 
     testWidgets('leads with the day energy the ring divides', (tester) async {
       await tester.pumpWidget(
         host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62)),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('2118'), findsOneWidget);
       expect(find.text('KCAL'), findsOneWidget);
@@ -183,10 +305,11 @@ void main() {
       await tester.pumpWidget(
         host(const FuelCard(proteinG: 0, carbsG: 0, fatG: 0)),
       );
+      await tester.pumpAndSettle();
 
       expect(find.textContaining('Scan a meal'), findsOneWidget);
-      // "0g · 0%" three times would read as a logged day of nothing.
-      expect(find.textContaining('0g · 0%'), findsNothing);
+      // "0g" three times would read as a logged day of nothing.
+      expect(find.text('0g'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -194,6 +317,7 @@ void main() {
       await tester.pumpWidget(
         host(const FuelCard(proteinG: 67.5, carbsG: 125, fatG: 25.5)),
       );
+      await tester.pumpAndSettle();
       expect(find.textContaining('27%'), findsWidgets);
     });
 
@@ -203,6 +327,7 @@ void main() {
       await tester.pumpWidget(
         host(const FuelCard(proteinG: 100, carbsG: 100, fatG: 100)),
       );
+      await tester.pumpAndSettle();
       for (final name in ['PROTEIN', 'CARBS', 'FAT']) {
         expect(find.text(name), findsOneWidget);
       }
@@ -218,7 +343,7 @@ void main() {
 
         await tester.pumpWidget(
           host(
-            // Worst case: three-digit grams in every row.
+            // Worst case: three-digit grams in every column.
             const FuelCard(proteinG: 245, carbsG: 512, fatG: 180),
             scaler: TextScaler.linear(scale),
           ),
@@ -245,6 +370,25 @@ void main() {
 
         expect(tester.takeException(), isNull);
       });
+
+      testWidgets('fits a wide phone at the ring size cap at ${scale}x text', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(430, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(
+          host(
+            const FuelCard(proteinG: 245, carbsG: 512, fatG: 180),
+            width: 430,
+            scaler: TextScaler.linear(scale),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+      });
     }
 
     testWidgets('the centre number stays inside the ring at large text', (
@@ -259,6 +403,7 @@ void main() {
           scaler: const TextScaler.linear(1.3),
         ),
       );
+      await tester.pumpAndSettle();
 
       final donut = tester.getSize(find.byType(MacroDonut));
       final centre = tester.getSize(
