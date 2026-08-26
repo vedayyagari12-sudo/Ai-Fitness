@@ -45,7 +45,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(dataOf(tester).sections, hasLength(3));
+      // Three macros plus the transparent reveal slice that drives the
+      // entrance; it settles to zero but stays in the list.
+      expect(dataOf(tester).sections, hasLength(4));
     });
 
     testWidgets('slices are sized by energy, not by grams', (tester) async {
@@ -65,15 +67,24 @@ void main() {
       expect(v[0], closeTo(400, 0.01));
       expect(v[1], closeTo(400, 0.01));
       expect(v[2], closeTo(900, 0.01));
+      expect(v[3], closeTo(0, 0.01), reason: 'reveal slice should be spent');
     });
 
-    testWidgets('the entrance starts from nothing and grows to the split', (
+    /// What fl_chart actually paints: the angle each slice occupies, as a
+    /// fraction of a full turn. Asserting on raw section VALUES is what let
+    /// a completely no-op entrance animation pass for a whole session — a
+    /// common factor on every value cancels out of `value / sumValue`, so
+    /// the values changed frame to frame while the drawn ring never did.
+    List<double> sweepFractions(WidgetTester tester) {
+      final sections = dataOf(tester).sections;
+      final sum = sections.fold<double>(0, (a, s) => a + s.value);
+      if (sum <= 0) return List<double>.filled(sections.length, 0);
+      return [for (final s in sections) s.value / sum];
+    }
+
+    testWidgets('the visible arc actually sweeps open, not just its values', (
       tester,
     ) async {
-      // The one behaviour worth pinning about the animation itself, since
-      // every other test settles past it: the very first frame must not
-      // already show the full target (there would be nothing to animate),
-      // and the settled end state must match the real data exactly.
       await tester.pumpWidget(
         host(
           MacroDonut(
@@ -82,20 +93,66 @@ void main() {
         ),
       );
 
-      final firstFrameTotal = dataOf(
+      // Frame one: the three real slices occupy almost none of the circle.
+      final start = sweepFractions(
         tester,
-      ).sections.fold<double>(0, (a, s) => a + s.value);
+      ).take(3).fold<double>(0, (a, b) => a + b);
       expect(
-        firstFrameTotal,
-        lessThan(1700 * 0.5),
-        reason: 'the ring is not animating in — it opened already full',
+        start,
+        lessThan(0.5),
+        reason: 'the ring painted its final shape immediately',
       );
 
-      await tester.pumpAndSettle();
-      final settledTotal = dataOf(
+      // Mid-flight: strictly more of the circle than at the start.
+      await tester.pump(const Duration(milliseconds: 300));
+      final mid = sweepFractions(
         tester,
-      ).sections.fold<double>(0, (a, s) => a + s.value);
-      expect(settledTotal, closeTo(1700, 0.01));
+      ).take(3).fold<double>(0, (a, b) => a + b);
+      expect(mid, greaterThan(start));
+
+      // Settled: the three real slices own the entire circle.
+      await tester.pumpAndSettle();
+      final end = sweepFractions(
+        tester,
+      ).take(3).fold<double>(0, (a, b) => a + b);
+      expect(end, closeTo(1.0, 0.001));
+      expect(end, greaterThan(mid));
+    });
+
+    testWidgets('the circle is never empty, including on frame one', (
+      tester,
+    ) async {
+      // Scaling all three values by a t that starts at 0 makes sumValue 0,
+      // and fl_chart then paints nothing at all — a blank card on the first
+      // frame of every populated day.
+      await tester.pumpWidget(
+        host(
+          MacroDonut(
+            split: MacroSplit.fromGrams(proteinG: 180, carbsG: 210, fatG: 62),
+          ),
+        ),
+      );
+      for (var i = 0; i < 8; i++) {
+        final sum = dataOf(
+          tester,
+        ).sections.fold<double>(0, (a, s) => a + s.value);
+        expect(sum, greaterThan(0), reason: 'nothing would paint at frame $i');
+        await tester.pump(const Duration(milliseconds: 130));
+      }
+    });
+
+    testWidgets('the reveal slice is gone once the entrance finishes', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          MacroDonut(
+            split: MacroSplit.fromGrams(proteinG: 180, carbsG: 210, fatG: 62),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(dataOf(tester).sections.last.value, closeTo(0, 0.001));
     });
 
     testWidgets('an empty day still yields a positive-valued section', (
@@ -187,7 +244,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final sections = dataOf(tester).sections;
-      expect(sections, hasLength(3));
+      expect(sections, hasLength(4));
       expect(sections[0].color, MacroDonut.proteinColor);
       expect(sections[1].color, MacroDonut.carbsColor);
       expect(sections[2].color, MacroDonut.fatColor);

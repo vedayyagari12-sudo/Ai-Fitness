@@ -155,13 +155,82 @@ void main() {
   testWidgets('the score keeps its old value at the floor diameter', (
     tester,
   ) async {
-    // Regression guard for the fontSize-scales-with-diameter change: at the
-    // unchanged 176dp floor the number must render at the unchanged size,
-    // not silently shrink or grow.
+    // The pre-responsive card hardcoded `fontSize: 52`. Asserting against
+    // that literal, rather than against `176 * 0.295`, is what makes this a
+    // real guard: the ratio version just restates the implementation and
+    // would still pass if the ratio drifted.
     await tester.pumpWidget(host(320));
     await tester.pumpAndSettle();
     final text = tester.widget<Text>(find.text('68'));
-    expect(text.style!.fontSize, closeTo(176.0 * 0.295, 0.01));
+    expect(text.style!.fontSize, closeTo(52, 0.5));
+  });
+
+  group('the centre score cannot grow into the rings', () {
+    // Nothing throws when it does — a Text simply paints past its box — so
+    // the overflow suite can't see this. It has to be measured.
+    for (final scale in [1.0, 1.3, 2.0]) {
+      testWidgets('a 3-digit score stays inside the hole at ${scale}x text', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(430, 1400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: MaterialApp(
+              home: Scaffold(
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: 398,
+                    // 100 is reachable — today_screen clamps the score to it.
+                    child: const ReadinessCard(
+                      data: ReadinessData(
+                        score: 100,
+                        caloriesProgress: 1,
+                        proteinProgress: 1,
+                        sessionsProgress: 1,
+                        fueledValue: '100%',
+                        caloriesLabel: '3,200 kcal',
+                        loadValue: '246',
+                        loadLabel: 'push day',
+                        proteinValue: '190g',
+                        proteinTarget: 'of 190g',
+                        bodyFatValue: '18.2%',
+                        bodyFatDelta: '-0.6%',
+                        trainingDetail: 'Trained today',
+                        fuelDetail: '3,200 of 3,200 kcal today',
+                        proteinDetail: '190g of 190g today',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final ring = ringDiameter(tester);
+        final hole = ReadinessRingPainter.holeDiameter(ring);
+        // getRect, not getSize: the score sits in a FittedBox, and getSize
+        // reports the child's pre-transform layout size — which stays large
+        // while the paint is scaled down, so it would report an overlap that
+        // is not on screen. getRect walks localToGlobal and so reflects the
+        // scale actually applied.
+        final score = tester.getRect(find.text('100')).width;
+        expect(
+          score,
+          lessThanOrEqualTo(hole),
+          reason:
+              'score is ${score.toStringAsFixed(1)}dp wide against a '
+              '${hole.toStringAsFixed(1)}dp hole — it is painting over the '
+              'inner rings',
+        );
+      });
+    }
   });
 
   group('the ring gradient reaches full colour at the end of ITS OWN arc', () {

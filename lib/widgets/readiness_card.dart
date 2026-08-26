@@ -90,40 +90,57 @@ class ReadinessCard extends StatelessWidget {
                       sessions: data.sessionsProgress * t,
                     ),
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${(data.score * t).round()}',
-                            style: kStatXLarge.copyWith(
-                              // Scales with the ring so the number keeps the
-                              // same visual weight relative to it, instead of
-                              // looking proportionally smaller as the ring
-                              // grows.
-                              fontSize: diameter * 0.295,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: kLime.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              'READY',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.8,
-                                color: kLime,
+                      // Pinned to the hole and to no text scaling, the same
+                      // guard MacroDonut uses. The ring is fixed geometry, so
+                      // an accessibility text setting cannot be allowed to
+                      // grow the number into it: at 1.3x a three-digit score
+                      // measured ~118dp against a ~102dp hole and painted
+                      // straight over the inner rings. Nothing throws when
+                      // that happens — the paragraph just overflows its box —
+                      // so an overflow test cannot catch it.
+                      child: SizedBox(
+                        width:
+                            ReadinessRingPainter.holeDiameter(diameter) * 0.86,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${(data.score * t).round()}',
+                                textScaler: TextScaler.noScaling,
+                                style: kStatXLarge.copyWith(
+                                  // Scales with the ring so the number keeps
+                                  // the same visual weight relative to it,
+                                  // instead of looking proportionally smaller
+                                  // as the ring grows.
+                                  fontSize: diameter * 0.295,
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: kLime.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  'READY',
+                                  textScaler: TextScaler.noScaling,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.8,
+                                    color: kLime,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -413,19 +430,40 @@ class ReadinessRingPainter extends CustomPainter {
   final double protein; // middle (cyan)
   final double sessions; // inner (pink)
 
+  // Ratios rather than fixed pixels, because the ring is responsive: held at
+  // a fixed 9/5 they looked proportionally thin once it grew past its old
+  // fixed 176, the way a 9px line looks thinner on a bigger circle even
+  // though nothing about it changed.
+  static const double _strokeRatio = 0.051;
+  static const double _gapRatio = 0.028;
+
+  /// Diameter of the empty middle, given the ring's overall [size].
+  ///
+  /// Exposed so the card can size the score to the hole from the same
+  /// numbers the painter draws with. Deriving it independently there is how
+  /// a centre readout silently ends up overlapping the innermost ring the
+  /// next time a ratio here changes.
+  static double holeDiameter(double size) =>
+      size - 6 * (_strokeRatio * size) - 4 * (_gapRatio * size);
+
   @override
   void paint(Canvas canvas, Size size) {
-    // Both scale with the ring's actual size now that it is responsive —
-    // held at a fixed 9/5 they looked proportionally thin once the ring grew
-    // past its old fixed 176, the way a 9px line looks thinner on a bigger
-    // circle even though nothing about it changed.
-    final stroke = size.width * 0.051;
-    final gap = size.width * 0.028;
+    final stroke = size.width * _strokeRatio;
+    final gap = size.width * _gapRatio;
     final center = Offset(size.width / 2, size.height / 2);
     final outer = size.width / 2 - stroke / 2;
-    _ring(canvas, center, outer, stroke, calories, kLime);
-    _ring(canvas, center, outer - (stroke + gap), stroke, protein, kCyan);
-    _ring(canvas, center, outer - 2 * (stroke + gap), stroke, sessions, kPink);
+    final blur = size.width * 0.018;
+    _ring(canvas, center, outer, stroke, blur, calories, kLime);
+    _ring(canvas, center, outer - (stroke + gap), stroke, blur, protein, kCyan);
+    _ring(
+      canvas,
+      center,
+      outer - 2 * (stroke + gap),
+      stroke,
+      blur,
+      sessions,
+      kPink,
+    );
   }
 
   void _ring(
@@ -433,6 +471,7 @@ class ReadinessRingPainter extends CustomPainter {
     Offset center,
     double radius,
     double stroke,
+    double blurSigma,
     double progress,
     Color color,
   ) {
@@ -451,12 +490,19 @@ class ReadinessRingPainter extends CustomPainter {
     // for a ring on a near-black card. Its own arc, not a blur on the crisp
     // one: blurring the crisp stroke directly would soften its edge too and
     // make the ring itself look out of focus rather than lit from behind.
+    // Width and blur both stay inside the ring pitch (stroke + gap). At the
+    // old 2.1x width with a hardcoded 8px blur the lime glow reached the
+    // cyan ring and the cyan glow reached the pink, blending exactly the
+    // three colours the legend underneath is naming — and the blur being a
+    // fixed constant while everything around it was a ratio meant it read
+    // tighter at the 224dp cap than at the 176dp floor.
+    final glowWidth = stroke * 1.4;
     final glow = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke * 2.1
+      ..strokeWidth = glowWidth
       ..strokeCap = StrokeCap.round
-      ..color = color.withValues(alpha: 0.30)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      ..color = color.withValues(alpha: 0.28)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurSigma);
     canvas.drawArc(rect, start, sweep, false, glow);
 
     final arc = Paint()

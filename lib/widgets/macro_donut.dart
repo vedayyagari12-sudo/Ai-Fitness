@@ -52,6 +52,21 @@ class MacroDonut extends StatelessWidget {
       duration: const Duration(milliseconds: 1000),
       curve: Curves.easeOutCubic,
       builder: (context, t, _) {
+        // The reveal is a FOURTH, invisible slice that shrinks as the three
+        // real ones grow — not a scale factor on the three values.
+        //
+        // Scaling all three by the same `t` was the obvious approach and it
+        // animates nothing at all: fl_chart derives each angle as
+        // `360 * value / sumValue`, and a common factor cancels straight out
+        // of that ratio, so the ring paints its final shape on frame one.
+        // Worse, at t == 0 every value is 0, sumValue is 0, and fl_chart
+        // silently paints an empty ring — the exact "looks broken" state the
+        // isEmpty placeholder below exists to prevent.
+        //
+        // Holding the remainder at `total * (1 - t)` keeps sumValue pinned to
+        // `total` for the whole run, so the sum is never zero and each real
+        // slice sweeps from 0 to its true angle.
+        final reveal = split.totalKcal * (1 - t);
         // fl_chart is unforgiving here in two different ways, so both are
         // handled rather than assumed away:
         //  · PieChartData.sumValue reduces over the section list, which
@@ -73,6 +88,9 @@ class MacroDonut extends StatelessWidget {
                 _slice(split.proteinKcal * t, proteinColor, ringThickness),
                 _slice(split.carbsKcal * t, carbsColor, ringThickness),
                 _slice(split.fatKcal * t, fatColor, ringThickness),
+                // Transparent, and exactly zero once settled, so fl_chart
+                // skips it entirely after the entrance finishes.
+                _slice(reveal, Colors.transparent, ringThickness),
               ];
 
         return SizedBox(
@@ -81,24 +99,29 @@ class MacroDonut extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // A soft halo behind the ring, tinted to whichever macro is
-              // carrying the most of today's energy — the one thing about
+              // A soft halo behind the ring band, tinted to whichever macro
+              // is carrying the most of today's energy — the one thing about
               // the day the ring itself is already the answer to, so the
               // glow doesn't invent a fourth colour meaning nothing.
-              // Minimal by design: a wash, not a spotlight.
+              //
+              // Painted as a blurred STROKE following the ring, not a
+              // BoxDecoration shadow. A circle-shaped boxShadow paints a
+              // filled blurred disc, which covers the donut hole too — so
+              // the centre readout ended up sitting on a macro-tinted wash
+              // instead of the card colour its contrast was measured
+              // against.
               if (!split.isEmpty)
-                Container(
-                  width: size * 0.94,
-                  height: size * 0.94,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: _dominantColour.withValues(alpha: 0.30 * t),
-                        blurRadius: size * 0.22,
-                        spreadRadius: size * 0.01,
-                      ),
-                    ],
+                IgnorePointer(
+                  child: CustomPaint(
+                    size: Size.square(size),
+                    painter: _RingGlowPainter(
+                      colour: _dominantColour,
+                      opacity: 0.34 * t,
+                      // Centre of the band: hole radius + half its width.
+                      radius: size * 0.34 + ringThickness / 2,
+                      strokeWidth: ringThickness * 1.5,
+                      blurSigma: size * 0.035,
+                    ),
                   ),
                 ),
               PieChart(
@@ -197,4 +220,47 @@ class MacroDonut extends StatelessWidget {
         radius: thickness,
         showTitle: false,
       );
+}
+
+/// A blurred ring of colour sitting under the donut.
+///
+/// Deliberately a stroked arc rather than a shadow on a circular box: a
+/// circle boxShadow fills, so it would wash the donut's hole — and the
+/// centre calorie readout with it — in the macro's colour.
+class _RingGlowPainter extends CustomPainter {
+  _RingGlowPainter({
+    required this.colour,
+    required this.opacity,
+    required this.radius,
+    required this.strokeWidth,
+    required this.blurSigma,
+  });
+
+  final Color colour;
+  final double opacity;
+  final double radius;
+  final double strokeWidth;
+  final double blurSigma;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (opacity <= 0 || radius <= 0) return;
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..color = colour.withValues(alpha: opacity.clamp(0.0, 1.0))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurSigma),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RingGlowPainter old) =>
+      old.colour != colour ||
+      old.opacity != opacity ||
+      old.radius != radius ||
+      old.strokeWidth != strokeWidth ||
+      old.blurSigma != blurSigma;
 }

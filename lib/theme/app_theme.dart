@@ -35,13 +35,13 @@ Color get kBgHighlight => AppColors.surfaceHighlight;
 //     vibrate against black.
 // Every value below was solved with a validator, not eyeballed; the guards in
 // test/palette_test.dart re-check them so they cannot drift back out of band.
-Color get kLime => _kDark ? const Color(0xFF00C252) : const Color(0xFF008938);
+Color get kLime => _kDark ? const Color(0xFF3DBD73) : const Color(0xFF00884A);
 Color get kBlue => _kDark ? const Color(0xFF1CA7F0) : const Color(0xFF007CB7);
-Color get kCyan => _kDark ? const Color(0xFF00B7C6) : const Color(0xFF00828D);
+Color get kCyan => _kDark ? const Color(0xFF27B3D6) : const Color(0xFF1A7F99);
 Color get kPink => _kDark ? const Color(0xFFFF3B79) : const Color(0xFFE70063);
 Color get kGold => _kDark ? const Color(0xFFC39D00) : const Color(0xFF8F7200);
 Color get kPurple => _kDark ? const Color(0xFF9569FF) : const Color(0xFF8A4FFF);
-Color get kGreen => _kDark ? const Color(0xFF00BE86) : const Color(0xFF00865D);
+Color get kGreen => _kDark ? const Color(0xFF2EBB91) : const Color(0xFF008565);
 Color get kOrange => _kDark ? const Color(0xFFED8200) : const Color(0xFFB36000);
 
 /// Chart-fill steps of the same eight hues — see the note above.
@@ -53,11 +53,11 @@ Color get kOrange => _kDark ? const Color(0xFFED8200) : const Color(0xFFB36000);
 class ChartFill {
   ChartFill._();
   static Color get lime =>
-      _kDark ? const Color(0xFF00B04A) : const Color(0xFF00AC48);
+      _kDark ? const Color(0xFF2EAC66) : const Color(0xFF29A963);
   static Color get blue =>
       _kDark ? const Color(0xFF006DA1) : const Color(0xFF006799);
   static Color get cyan =>
-      _kDark ? const Color(0xFF00A5B3) : const Color(0xFF00A2AF);
+      _kDark ? const Color(0xFF00A2C5) : const Color(0xFF009FC2);
   static Color get pink =>
       _kDark ? const Color(0xFFCB0057) : const Color(0xFFB2004B);
   static Color get gold =>
@@ -65,7 +65,7 @@ class ChartFill {
   static Color get purple =>
       _kDark ? const Color(0xFF812CFF) : const Color(0xFF7D0BFF);
   static Color get green =>
-      _kDark ? const Color(0xFF00AC79) : const Color(0xFF00A976);
+      _kDark ? const Color(0xFF14AB82) : const Color(0xFF0BA880);
   static Color get orange =>
       _kDark ? const Color(0xFF9C5300) : const Color(0xFF944F00);
 }
@@ -73,7 +73,15 @@ class ChartFill {
 // Cool bluish-white used for the hero-card lift and page backdrop — the
 // WHOOP-style "bluish white into black" look. Deliberately NOT an accent
 // (no green tint anywhere in the chrome).
-const kSteel = Color(0xFFAEC4E4);
+//
+// Per-theme because it behaves very differently on the two grounds. On
+// near-black a blue-steel wash reads as light catching glass. On white the
+// same colour is the single largest source of blue in the app: it is painted
+// over EVERY card (readiness, fuel, week strip, trend) and its chroma of
+// 0.051 is more than twelve times the page background's 0.004, so the whole
+// light theme picked up a cold cast. The light step keeps the direction and
+// drops the saturation to roughly a third.
+Color get kSteel => _kDark ? const Color(0xFFAEC4E4) : const Color(0xFFBCC3CD);
 Color get kTextPrimary => AppColors.textPrimary;
 Color get kTextSecondary => AppColors.textSecondary;
 Color get kTextMuted => AppColors.textMuted;
@@ -158,9 +166,12 @@ Color get kBodyContour => _kDark
 LinearGradient get kPageGradient => LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
+  // Light steps are near-neutral now: the old top stop carried chroma 0.018
+  // against a 0.004 base, so the page itself was tinted blue before a single
+  // card was drawn on it. Direction kept, saturation cut to about a third.
   colors: _kDark
       ? const [Color(0xFF1E2736), Color(0xFF10131A), Color(0xFF0A0A0A)]
-      : const [Color(0xFFDFE7F3), Color(0xFFEDF1F8), Color(0xFFF3F4F7)],
+      : const [Color(0xFFE3E7EB), Color(0xFFEFF1F4), Color(0xFFF3F4F6)],
   stops: const [0.0, 0.45, 1.0],
 );
 
