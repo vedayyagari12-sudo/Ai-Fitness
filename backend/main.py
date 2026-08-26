@@ -18,7 +18,7 @@ import base64
 import json
 import httpx
 
-from .database import SessionLocal, engine, Base
+from .database import SessionLocal, engine, engine_error, Base
 from .models import User, Workout
 from .schemas import (
     UserCreate, UserResponse,
@@ -36,10 +36,16 @@ logger = logging.getLogger("physiqo")
 # could never actually be reported: the monitor would see a refused
 # connection and nothing would explain it. It also made this module
 # impossible to import in a test without a live database.
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as exc:  # pragma: no cover - depends on deploy environment
-    logger.error("startup: could not create tables (%s); /test-db will 503", exc)
+if engine is None:
+    # database.py already logged why. Nothing to create against.
+    logger.error("startup: no database engine; /test-db will 503")
+else:
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:  # pragma: no cover - depends on deploy environment
+        logger.error(
+            "startup: could not create tables (%s); /test-db will 503", exc
+        )
 
 app = FastAPI()
 
@@ -80,6 +86,14 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 def get_db():
+    if SessionLocal is None:
+        # Reached only when DATABASE_URL is missing or malformed. Saying which
+        # is the whole point: the alternative was a container that never
+        # started and a Cloud Run log about a port.
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database not configured: {engine_error}",
+        )
     db = SessionLocal()
     try:
         yield db
