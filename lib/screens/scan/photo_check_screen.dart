@@ -27,14 +27,17 @@ class _PhotoCheckScreenState extends State<PhotoCheckScreen> {
 
   Future<void> _pick(ImageSource source) async {
     final granted = await PermissionService.requestCameraAndMedia(context);
-    if (!granted) return;
+    // Both the permission prompt and the picker itself can outlast this
+    // screen — the user can back out while either is on screen — so each
+    // await needs its own mounted check before touching context or state.
+    if (!mounted || !granted) return;
     try {
       final file = await _picker.pickImage(
         source: source,
         imageQuality: 80,
         maxWidth: 1024,
       );
-      if (file != null) {
+      if (file != null && mounted) {
         setState(() => _image = file);
       }
     } catch (_) {}

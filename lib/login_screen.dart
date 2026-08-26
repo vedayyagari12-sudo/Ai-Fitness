@@ -124,6 +124,11 @@ class _LoginScreenState extends State<LoginScreen> {
         password: passwordController.text.trim(),
       );
     } on AuthException catch (e) {
+      // LoginScreen sits inside a StreamBuilder on onAuthStateChange
+      // (main.dart), so a state change arriving while this request is in
+      // flight — a verification deep link, a session restored elsewhere —
+      // can dispose this screen before the response comes back.
+      if (!mounted) return;
       final msg = e.message.toLowerCase();
       setState(() {
         // Match the stable error code first; the human-readable string is
@@ -141,6 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => message = 'Could not sign in — check your connection.');
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -168,6 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
         // redirect and opens a browser instead of the app.
         emailRedirectTo: kEmailRedirectUrl,
       );
+      // Same StreamBuilder-disposal risk as _signIn — see its comment.
+      if (!mounted) return;
 
       // Signing up with an address that already exists does NOT raise. To
       // avoid telling an attacker which emails are registered, Supabase
@@ -199,6 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } on AuthException catch (e) {
+      if (!mounted) return;
       final msg = e.message.toLowerCase();
       setState(() {
         if (msg.contains('already registered') ||
@@ -215,6 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => message = 'Could not sign up — check your connection.');
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -237,6 +247,8 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         emailRedirectTo: kEmailRedirectUrl,
       );
+      // Same StreamBuilder-disposal risk as _signIn — see its comment.
+      if (!mounted) return;
       setState(() {
         message =
             'Verification email sent — check your inbox, and your spam or '
@@ -245,6 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       _startResendCooldown();
     } on AuthException catch (e) {
+      if (!mounted) return;
       final msg = e.message.toLowerCase();
       setState(() {
         if (msg.contains('rate') || e.code == 'over_email_send_rate_limit') {
@@ -260,6 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() => message = 'Could not resend — try again.');
     } finally {
       if (mounted) setState(() => isLoading = false);

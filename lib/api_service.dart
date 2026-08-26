@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import 'services/error_reporter.dart';
 
-const String baseUrl = 'https://fitness-app-xayv.onrender.com';
+const String baseUrl = 'https://fitai-api-242478218388.us-east1.run.app';
 
 Map<String, String> getHeaders() {
   final session = Supabase.instance.client.auth.currentSession;

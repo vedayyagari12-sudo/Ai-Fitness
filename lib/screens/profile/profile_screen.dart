@@ -58,6 +58,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _save(String key, dynamic value) async {
+    // Both call sites reach here only after awaiting a bottom sheet
+    // (_editChoice, _editNumber), and the user can back out of this screen
+    // while that sheet is open.
+    if (!mounted) return;
     setState(() => _profile[key] = value);
     try {
       await upsertUserProfile({key: value});
