@@ -274,6 +274,42 @@ void main() {
     });
   }
 
+  group('the glow is gentler on a light surface', () {
+    // A glow on near-black behaves like light: it adds brightness and falls
+    // away into the background. On white it has nowhere brighter to go, so
+    // the same alpha only darkens and tints — it stops reading as a glow and
+    // starts reading as a coloured smudge. Nothing else in the suite can see
+    // this, because it is a paint value rather than a layout or a contrast.
+    test('light mode uses a weaker, tighter halo than dark', () {
+      AppColors.brightness = Brightness.dark;
+      final darkAlpha = kGlowAlpha, darkBlur = kGlowBlurRatio;
+      AppColors.brightness = Brightness.light;
+      final lightAlpha = kGlowAlpha, lightBlur = kGlowBlurRatio;
+
+      expect(
+        lightAlpha,
+        lessThan(darkAlpha),
+        reason: 'a light-mode glow at dark-mode strength reads as a stain',
+      );
+      expect(
+        lightBlur,
+        lessThanOrEqualTo(darkBlur),
+        reason: 'a wider blur spreads the tint over more of a light surface',
+      );
+    });
+
+    test('the halo stays a hint in both themes, never a fill', () {
+      for (final mode in [Brightness.dark, Brightness.light]) {
+        AppColors.brightness = mode;
+        expect(
+          kGlowAlpha,
+          inExclusiveRange(0.0, 0.5),
+          reason: 'a glow past ~0.5 is a filled disc, not a halo',
+        );
+      }
+    });
+  });
+
   group('the tab accents read as one family', () {
     // Seven accents appeared on a single screen and each tab repainted the
     // chrome from a 232-degree spread of the wheel, which is what made the

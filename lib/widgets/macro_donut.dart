@@ -116,11 +116,11 @@ class MacroDonut extends StatelessWidget {
                     size: Size.square(size),
                     painter: _RingGlowPainter(
                       colour: _dominantColour,
-                      opacity: 0.34 * t,
+                      opacity: kGlowAlpha * t,
                       // Centre of the band: hole radius + half its width.
                       radius: size * 0.34 + ringThickness / 2,
                       strokeWidth: ringThickness * 1.5,
-                      blurSigma: size * 0.035,
+                      blurSigma: size * kGlowBlurRatio,
                     ),
                   ),
                 ),

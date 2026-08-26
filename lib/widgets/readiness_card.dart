@@ -501,7 +501,7 @@ class ReadinessRingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = glowWidth
       ..strokeCap = StrokeCap.round
-      ..color = color.withValues(alpha: 0.28)
+      ..color = color.withValues(alpha: kGlowAlpha)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurSigma);
     canvas.drawArc(rect, start, sweep, false, glow);
 

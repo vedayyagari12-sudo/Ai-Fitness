@@ -159,6 +159,22 @@ Color get kChartGrid => _kDark
     ? Colors.white.withValues(alpha: 0.09)
     : _kInk.withValues(alpha: 0.08);
 
+/// Opacity for the soft halo painted under a ring or arc.
+///
+/// Much lower on a light surface. A glow on near-black behaves like light:
+/// it adds brightness and falls away into the background, so it can carry
+/// real strength before it is noticed. The same alpha on white has nowhere
+/// brighter to go — it can only darken and tint, so it stops reading as a
+/// glow and starts reading as a coloured smudge around the mark. Halving it
+/// keeps the lift on dark and takes the stain off light.
+double get kGlowAlpha => _kDark ? 0.30 : 0.13;
+
+/// Blur radius for that halo, as a fraction of the mark's size. Tighter on
+/// light for the same reason the alpha is lower: a wide blur spreads the
+/// tint over more of the surface, which is exactly what makes it read as a
+/// stain rather than a glow.
+double get kGlowBlurRatio => _kDark ? 0.035 : 0.026;
+
 /// A de-emphasised member of a series — the older weeks sitting behind the
 /// latest one.
 ///
