@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -47,7 +49,57 @@ else:
             "startup: could not create tables (%s); /test-db will 503", exc
         )
 
-app = FastAPI()
+# Bounded rather than httpx's default of no timeout at all: a hung upstream
+# would otherwise hold a Cloud Run request open until the platform's own
+# timeout, billing CPU the whole time.
+REQUEST_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+
+# One client for the process, not one per call.
+#
+# Every Supabase read used to open its own AsyncClient, which means a fresh
+# TCP connection and a full TLS handshake each time — and then threw the
+# warmed connection away. Against a hosted Postgres that handshake is
+# typically 100-300ms, and the dashboard alone made four such calls back to
+# back, so most of its latency was spent re-establishing connections it had
+# just closed. A shared client keeps them alive and reuses them across both
+# calls and requests.
+_http: httpx.AsyncClient | None = None
+
+
+def http_client() -> httpx.AsyncClient:
+    """The shared client, or a short-lived one if the app never started.
+
+    The fallback exists for tests and scripts that import a handler without
+    running the lifespan; it is correct but unpooled, so it must not be the
+    path production takes.
+    """
+    if _http is None:
+        return httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
+    return _http
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _http
+    _http = httpx.AsyncClient(
+        timeout=REQUEST_TIMEOUT,
+        # keepalive_expiry is deliberately longer than Cloud Run's idle
+        # window is short: an instance that has been throttled still holds
+        # its sockets, and reusing one is cheaper than a new handshake.
+        limits=httpx.Limits(
+            max_keepalive_connections=10,
+            max_connections=20,
+            keepalive_expiry=60.0,
+        ),
+    )
+    try:
+        yield
+    finally:
+        await _http.aclose()
+        _http = None
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -378,14 +430,20 @@ async def fetch_supabase_table(
     table: str, query: str, token: str | None = None
 ) -> list[dict]:
     headers = supabase_user_headers(token) if token else supabase_headers()
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
+    try:
+        response = await http_client().get(
             f"{SUPABASE_URL}/rest/v1/{table}?{query}",
             headers=headers,
         )
-        if response.status_code == 200:
-            return response.json()
+    except httpx.HTTPError as exc:
+        # Previously any transport failure raised out of here and surfaced
+        # as a 500. An empty list is what a 4xx already produced, so this
+        # keeps one shape for "no rows available" and logs the real cause.
+        logger.warning("supabase read failed (%s): %s", table, exc)
         return []
+    if response.status_code == 200:
+        return response.json()
+    return []
 
 
 def build_dashboard_charts(goal: str, data: dict) -> list[dict]:
@@ -448,19 +506,36 @@ async def get_streak(
     offset = timedelta(minutes=tz)
     today = (datetime.now(timezone.utc) + offset).date()
 
-    # Collect active dates from workouts table (PostgreSQL)
-    workout_rows = (
-        db.query(Workout.created_at)
-        .filter(Workout.user_id == user_id)
-        .all()
-    )
-    workout_dates = {(r[0] + offset).date() for r in workout_rows if r[0]}
+    # Workouts (Postgres) and meals (Supabase) are independent reads, so they
+    # run together rather than one after the other. The SQL one is ordinary
+    # blocking SQLAlchemy and goes to a thread: inside an `async def` handler
+    # a blocking socket read stalls the whole event loop, so it would delay
+    # every other request this instance is serving, not just this one.
+    #
+    # NOTE: both reads are deliberately unbounded. The endpoint reports a
+    # LONGEST streak alongside the current one, and that can be anywhere in
+    # a user's history, so a date window would silently truncate it. It does
+    # mean the work grows with total history — see the note in
+    # supabase_indexes.sql; the composite index keeps it cheap for now, but
+    # a user with years of data will eventually want a stored longest-streak
+    # rather than a full scan on every load.
+    def _load_workout_dates() -> set:
+        # Own Session, same reason as the dashboard's — see the note there.
+        with SessionLocal() as session:
+            rows = (
+                session.query(Workout.created_at)
+                .filter(Workout.user_id == user_id)
+                .all()
+            )
+        return {(r[0] + offset).date() for r in rows if r[0]}
 
-    # Collect active dates from calorie_logs table (Supabase)
-    calorie_rows = await fetch_supabase_table(
-        "calorie_logs",
-        f"user_id=eq.{user_id}&select=created_at",
-        token=credentials.credentials,
+    workout_dates, calorie_rows = await asyncio.gather(
+        asyncio.to_thread(_load_workout_dates),
+        fetch_supabase_table(
+            "calorie_logs",
+            f"user_id=eq.{user_id}&select=created_at",
+            token=credentials.credentials,
+        ),
     )
     calorie_dates = set()
     for row in calorie_rows:
@@ -916,11 +991,69 @@ async def get_dashboard(
 ):
     ensure_user_access(user_id, user)
 
-    profiles = await fetch_supabase_table(
-        "user_profiles",
-        f"id=eq.{user_id}&select=goal,weight_kg,gender,age,height_cm,workout_frequency",
-        token=credentials.credentials,
+    week_ago = (datetime.utcnow() - timedelta(days=6)).date().isoformat()
+    month_ago = (datetime.utcnow() - timedelta(days=29)).date().isoformat()
+
+    # All five reads are independent — none of them needs another's result to
+    # build its query — so they run at once instead of one after another.
+    # Sequentially this endpoint paid five full round trips to Supabase and
+    # Postgres before it could compute anything; concurrently it pays about
+    # one, since the slowest call now covers the rest.
+    #
+    # The workout query is ordinary blocking SQLAlchemy, so it goes to a
+    # thread rather than being awaited directly. That matters twice over: it
+    # lets the query overlap the HTTP calls, and it keeps a blocking socket
+    # read off the event loop, which in an `async def` handler would
+    # otherwise stall every other request this instance is serving.
+    def _load_workouts() -> list:
+        # Its OWN Session, opened and closed inside this thread rather than
+        # the request-scoped `db` above. A Session is not safe to hand to
+        # another thread: SQLAlchemy makes no guarantee about it, SQLite
+        # refuses outright ("objects created in a thread can only be used in
+        # that same thread"), and psycopg2 only tolerates it by accident of
+        # the GIL. `db` stays as a dependency because get_db is what turns an
+        # unconfigured database into a clear 503 — and it costs nothing,
+        # since a Session opens no connection until something queries it.
+        with SessionLocal() as session:
+            return (
+                session.query(Workout)
+                .filter(
+                    Workout.user_id == user_id,
+                    Workout.created_at >= datetime.utcnow() - timedelta(days=30),
+                )
+                .order_by(Workout.created_at.asc())
+                .all()
+            )
+
+    profiles, calorie_logs, bodyweight_logs, physique_scans, workouts = (
+        await asyncio.gather(
+            fetch_supabase_table(
+                "user_profiles",
+                f"id=eq.{user_id}&select=goal,weight_kg,gender,age,height_cm,workout_frequency",
+                token=credentials.credentials,
+            ),
+            fetch_supabase_table(
+                "calorie_logs",
+                f"user_id=eq.{user_id}&created_at=gte.{week_ago}T00:00:00&select=calories,protein_g,carbs_g,fat_g,food_name,created_at",
+                token=credentials.credentials,
+            ),
+            fetch_supabase_table(
+                "bodyweight_logs",
+                f"user_id=eq.{user_id}&created_at=gte.{month_ago}T00:00:00&order=created_at.asc&select=weight_kg,created_at",
+                token=credentials.credentials,
+            ),
+            fetch_supabase_table(
+                "physique_scans",
+                f"user_id=eq.{user_id}&order=created_at.asc"
+                "&select=body_fat_estimate,overall_score,created_at,"
+                "chest_score,back_score,lats_score,mid_back_score,traps_score,"
+                "shoulders_score,arms_score,legs_score,core_score",
+                token=credentials.credentials,
+            ),
+            asyncio.to_thread(_load_workouts),
+        )
     )
+
     profile = profiles[0] if profiles else {}
     goal = profile.get("goal", "maintain")
     profile_weight = profile.get("weight_kg")
@@ -934,38 +1067,6 @@ async def get_dashboard(
     # Goal-adjusted daily targets shown to the user (surplus for bulk, deficit
     # for cut, etc.). `tdee` itself stays maintenance for the deficit charts.
     calorie_target, protein_target = goal_adjusted_targets(tdee, profile_weight, goal)
-
-    week_ago = (datetime.utcnow() - timedelta(days=6)).date().isoformat()
-    month_ago = (datetime.utcnow() - timedelta(days=29)).date().isoformat()
-
-    calorie_logs = await fetch_supabase_table(
-        "calorie_logs",
-        f"user_id=eq.{user_id}&created_at=gte.{week_ago}T00:00:00&select=calories,protein_g,carbs_g,fat_g,food_name,created_at",
-        token=credentials.credentials,
-    )
-    bodyweight_logs = await fetch_supabase_table(
-        "bodyweight_logs",
-        f"user_id=eq.{user_id}&created_at=gte.{month_ago}T00:00:00&order=created_at.asc&select=weight_kg,created_at",
-        token=credentials.credentials,
-    )
-    physique_scans = await fetch_supabase_table(
-        "physique_scans",
-        f"user_id=eq.{user_id}&order=created_at.asc"
-        "&select=body_fat_estimate,overall_score,created_at,"
-        "chest_score,back_score,lats_score,mid_back_score,traps_score,"
-        "shoulders_score,arms_score,legs_score,core_score",
-        token=credentials.credentials,
-    )
-
-    workouts = (
-        db.query(Workout)
-        .filter(
-            Workout.user_id == user_id,
-            Workout.created_at >= datetime.utcnow() - timedelta(days=30),
-        )
-        .order_by(Workout.created_at.asc())
-        .all()
-    )
 
     day_labels = last_n_day_labels(7, tz)
     dates = last_n_dates(7, tz)

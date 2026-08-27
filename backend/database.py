@@ -35,7 +35,41 @@ if not SQLALCHEMY_DATABASE_URL:
     engine_error = "DATABASE_URL is not set"
 else:
     try:
-        engine = create_engine(SQLALCHEMY_DATABASE_URL)
+        # Pooling and connect_timeout are Postgres/psycopg2 concepts. SQLite
+        # rejects connect_timeout outright with a TypeError and ignores the
+        # pool sizes, so a non-Postgres URL — which tests and local scripts
+        # legitimately use — gets a plain engine.
+        pg_options = {}
+        if SQLALCHEMY_DATABASE_URL.startswith(("postgresql", "postgres")):
+            pg_options = dict(
+                # Cloud Run bills per request and throttles CPU to near zero
+                # between them, so an idle instance's pooled connections go
+                # stale without the app ever noticing. Postgres (and the
+                # Supabase pooler in front of it) then drops them, and the
+                # next request checks out a dead socket and fails or hangs on
+                # its first query. pool_pre_ping spends one cheap round trip
+                # validating a connection before handing it over, turning
+                # that failure into a transparent reconnect.
+                pool_pre_ping=True,
+                # Discard anything older than five minutes rather than
+                # waiting to find out it is dead — comfortably under the
+                # pooler's own idle timeout, so we retire connections first.
+                pool_recycle=300,
+                # Deliberately small. Cloud Run scales by adding INSTANCES,
+                # and each keeps its own pool, so the count against Postgres
+                # is pool_size x instances. A default 5 (+10 overflow) across
+                # twenty instances would exhaust the connection limit; a
+                # couple per instance will not, and one instance serves few
+                # enough concurrent requests to need more.
+                pool_size=2,
+                max_overflow=3,
+                # Fail loudly rather than hanging a request forever when the
+                # pool is exhausted.
+                pool_timeout=10,
+                connect_args={"connect_timeout": 10},
+            )
+
+        engine = create_engine(SQLALCHEMY_DATABASE_URL, **pg_options)
     except Exception as exc:
         # Deliberately the exception's class and not its message: SQLAlchemy
         # quotes the offending URL back in ArgumentError, and that URL carries
