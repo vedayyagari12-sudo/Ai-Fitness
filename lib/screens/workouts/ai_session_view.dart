@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,9 @@ import '../../services/nav_service.dart'
     show triggerTodayRefresh, triggerHistoryRefresh;
 import '../../services/split_service.dart';
 import '../../services/today_cache.dart';
+import '../../data/bodyweight_load.dart';
+import '../../utils/units.dart';
+import '../../utils/workout_load.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_widgets.dart';
 import '../../utils/snackbar.dart';
@@ -44,6 +48,28 @@ class _GeneratedExercise {
   double? weight;
   final String? muscleGroup;
   bool checked = false;
+
+  /// What the user actually lifted, as typed. Seeded from the AI's suggested
+  /// [weight] so accepting it is no taps at all, and editing it is one.
+  ///
+  /// The controller lives on the exercise rather than in the widget so it
+  /// survives the list rebuilding on every keystroke — recreating it there
+  /// would reset the cursor to the start mid-typing.
+  late final TextEditingController weightController = TextEditingController(
+    text: weight == null || weight == 0
+        ? ''
+        : weight!.toStringAsFixed(weight! % 1 == 0 ? 0 : 1),
+  );
+
+  /// The typed weight, or null when the field is empty or unusable.
+  double? get enteredWeightLbs {
+    final text = weightController.text.trim();
+    if (text.isEmpty) return null;
+    if (liftWeightInputError(text) != null) return null;
+    return double.tryParse(text);
+  }
+
+  void disposeControllers() => weightController.dispose();
 }
 
 /// Today's session state, kept outside the widget so leaving and re-entering
@@ -123,6 +149,8 @@ class _AiSessionViewState extends State<AiSessionView> {
   void initState() {
     super.initState();
     _restore();
+    // Needed before a push-up or a pull-up can be costed at all.
+    unawaited(_loadBodyweight());
   }
 
   /// Rehydrate today's session from the cache; only generate when there
@@ -284,6 +312,14 @@ class _AiSessionViewState extends State<AiSessionView> {
   }
 
   void _parseMainExercises(Map<String, dynamic> data) {
+    // The previous session's controllers go here and nowhere else. They
+    // cannot be released in the widget's dispose(): _SessionCache hands the
+    // SAME _GeneratedExercise objects back when the TRAIN tab is revisited,
+    // so disposing on widget teardown would leave the rebuilt rows holding
+    // dead controllers.
+    for (final old in mainExercises) {
+      old.disposeControllers();
+    }
     final list = data['main_workout'] as List? ?? [];
     mainExercises = list.map((e) {
       final weight = e['weight'];
@@ -330,7 +366,14 @@ class _AiSessionViewState extends State<AiSessionView> {
             'exercise': e.exercise,
             'sets': e.sets,
             'reps': e.reps,
-            if (e.weight != null) 'weight': e.weight,
+            // What the user actually lifted, falling back to the AI's
+            // suggestion only when they left the field untouched. Sending
+            // the suggestion over an entered value was the whole problem:
+            // the logged history recorded a plan rather than a workout.
+            if (e.enteredWeightLbs != null)
+              'weight': e.enteredWeightLbs
+            else if (e.weight != null)
+              'weight': e.weight,
           },
         )
         .toList();
@@ -356,7 +399,43 @@ class _AiSessionViewState extends State<AiSessionView> {
   }
 
   // ── Derived metrics ──────────────────────────────────────────────────────
-  int get _estLoad => mainExercises.fold(0, (sum, e) => sum + e.sets * e.reps);
+  /// The user's most recent logged bodyweight, in lbs. Null until it loads,
+  /// and null forever if they have never logged one — in which case the
+  /// bodyweight exercises stay uncosted rather than being given a guess.
+  double? _bodyweightLbs;
+
+  ExerciseLoad _loadFor(_GeneratedExercise e) => exerciseLoad(
+    exerciseName: e.exercise,
+    sets: e.sets,
+    reps: e.reps,
+    externalWeightLbs: e.enteredWeightLbs ?? 0,
+    bodyweightLbs: _bodyweightLbs,
+  );
+
+  /// Total load for the session, recomputed on every keystroke.
+  ///
+  /// This used to be `sets x reps` with no weight in it at all, which is why
+  /// it could not reflect what was actually lifted — it was a rep count
+  /// wearing the word "load". It now costs each exercise properly: typed
+  /// weight for a barbell lift, bodyweight x coefficient for a push-up, and
+  /// both added together for a weighted pull-up.
+  SessionLoad get _sessionLoad => sessionLoad(mainExercises.map(_loadFor));
+
+  int get _estLoad => _sessionLoad.lbs.round();
+
+  /// True when a bodyweight movement is in the session but no bodyweight has
+  /// ever been logged, so part of the total is genuinely unknown.
+  bool get _needsBodyweight => _sessionLoad.needsBodyweight;
+
+  Future<void> _loadBodyweight() async {
+    final history = await getBodyweightHistory();
+    if (!mounted || history.isEmpty) return;
+    // History comes back oldest-first; the latest entry is the one to use.
+    final latest = history.last;
+    final kg = (latest['weight_kg'] as num?)?.toDouble();
+    if (kg == null || kg <= 0) return;
+    setState(() => _bodyweightLbs = kgToLbs(kg));
+  }
 
   String _canon(String? raw) {
     final g = (raw ?? '').toLowerCase();
@@ -721,9 +800,45 @@ class _AiSessionViewState extends State<AiSessionView> {
             child: _statBox('EXERCISES', '${mainExercises.length}', '', null),
           ),
           const SizedBox(width: 10),
-          Expanded(child: _statBox('EST. LOAD', '$_estLoad', '', kGold)),
+          Expanded(
+            // "TOTAL LOAD", not "EST.": it is now computed from the weights
+            // actually entered rather than guessed before the session.
+            child: _statBox('TOTAL LOAD', '$_estLoad', 'lbs', kGold),
+          ),
         ],
       ),
+      if (_needsBodyweight) ...[
+        const SizedBox(height: 10),
+        // A bodyweight movement is in this session and we have no bodyweight
+        // to cost it with. Saying so beats quietly reporting a load that is
+        // missing a chunk, and beats inventing a default weight that would
+        // make every historical figure wrong in a way nobody could see.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: kGold.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: kGold.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline_rounded, size: 16, color: kGold),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Log your bodyweight on the BODY tab to include push-ups '
+                  'and pull-ups in your load.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
       const SizedBox(height: 16),
       _whyCard(),
       const SizedBox(height: 22),
@@ -1003,7 +1118,7 @@ class _AiSessionViewState extends State<AiSessionView> {
               // they need, while prose ones ("30-45 sec hold per arm") still
               // cannot grow far enough to crush the name.
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 108),
+                constraints: const BoxConstraints(maxWidth: 92),
                 child: Text(
                   '${e.sets} × ${e.repsRaw}',
                   textAlign: TextAlign.right,
@@ -1016,11 +1131,76 @@ class _AiSessionViewState extends State<AiSessionView> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              _weightField(e),
             ],
           ),
         ),
       );
     });
+  }
+
+  /// Inline weight entry for one exercise.
+  ///
+  /// Pre-filled from the AI's suggestion so accepting it costs nothing and
+  /// changing it costs one tap. Every keystroke re-costs the session, which
+  /// is the point — the load figure used to be computed before the workout
+  /// and so could never reflect what was actually lifted.
+  Widget _weightField(_GeneratedExercise e) {
+    final error = liftWeightInputError(e.weightController.text);
+    final isBodyweight = isBodyweightExercise(e.exercise);
+    return SizedBox(
+      width: 74,
+      child: TextField(
+        controller: e.weightController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.center,
+        textInputAction: TextInputAction.done,
+        // Rebuilds the row and the header total on every keystroke.
+        onChanged: (_) => setState(() {}),
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: 8,
+          ),
+          // Bodyweight movements genuinely need no entry, so the hint says
+          // "add" rather than presenting an empty field as unfinished.
+          hintText: isBodyweight ? '+lbs' : 'lbs',
+          hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+          errorText: error == null ? null : '',
+          errorStyle: const TextStyle(height: 0, fontSize: 0),
+          filled: true,
+          fillColor: kBgElevated,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(
+              color: error == null ? kBorder : AppColors.error,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(
+              color: error == null ? kCyan : AppColors.error,
+              width: 1.5,
+            ),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: AppColors.error),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: AppColors.error, width: 1.5),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _checkDot(bool done) {

@@ -68,10 +68,44 @@ CREATE POLICY "Users can delete own bodyweight logs"
 
 -- ── Additive migrations (safe to re-run) ─────────────────────────────────────
 
--- The training split is written to the profile so it follows the account
--- across devices. Without this column that write fails and the choice only
--- ever lived in this device's local storage.
+-- ── Profile columns ─────────────────────────────────────────────────────────
+--
+-- Every profile column is (re)declared here, not just the ones added late.
+--
+-- The CREATE TABLE above is guarded by IF NOT EXISTS, which does exactly what
+-- it says: on a database whose user_profiles table already exists, the whole
+-- statement is skipped — including any column added to it since that table
+-- was first created. So a column can be present in the CREATE, absent from
+-- the real table, and nobody finds out until a write fails.
+--
+-- That is what happened to training_split, and it is not specific to it. An
+-- account created before `equipment` or `fitness_level` was added to the
+-- CREATE has neither, and saving either one fails with PGRST204 ("could not
+-- find the column in the schema cache"). The app updates its local state
+-- first and then hits that error, so the setting appears to save and reverts
+-- on the next launch.
+--
+-- ADD COLUMN IF NOT EXISTS is idempotent, so listing all of them costs
+-- nothing on an up-to-date database and repairs an old one.
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS goal TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS age INT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS height_cm FLOAT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS weight_kg FLOAT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS workout_frequency TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS equipment TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS fitness_level TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS training_split TEXT;
+
+-- Confirms every profile column now exists. Expect nine rows.
+--
+--   SELECT column_name, data_type
+--   FROM information_schema.columns
+--   WHERE table_name = 'user_profiles'
+--     AND column_name IN ('goal','gender','age','height_cm','weight_kg',
+--                         'workout_frequency','equipment','fitness_level',
+--                         'training_split')
+--   ORDER BY column_name;
 
 -- Back detail from a physique scan. Null on scans with no back photo.
 ALTER TABLE physique_scans ADD COLUMN IF NOT EXISTS lats_score FLOAT;

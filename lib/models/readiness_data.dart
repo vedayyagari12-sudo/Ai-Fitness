@@ -19,10 +19,16 @@ class ReadinessData {
     required this.trainingDetail,
     required this.fuelDetail,
     required this.proteinDetail,
+    this.isRestDay = false,
   });
 
   // Center
   final int score;
+
+  /// Today is a scheduled rest day on the user's split, so the score carries
+  /// the rest-day credit. Drives the caption under the ring — without it the
+  /// number jumps 40 points with no visible reason.
+  final bool isRestDay;
 
   // Ring sweeps (0..1)
   final double caloriesProgress; // outer (lime)
@@ -60,5 +66,6 @@ class ReadinessData {
     trainingDetail: 'No sessions yet this week',
     fuelDetail: 'Nothing logged today',
     proteinDetail: 'Nothing logged today',
+    isRestDay: false,
   );
 }

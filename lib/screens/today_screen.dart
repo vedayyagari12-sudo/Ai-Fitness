@@ -11,6 +11,7 @@ import '../services/today_cache.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import '../theme/theme_controller.dart';
+import '../utils/readiness_score.dart';
 import '../utils/strength_trend.dart';
 import '../utils/units.dart';
 import '../widgets/fuel_card.dart';
@@ -38,6 +39,11 @@ class _TodayScreenState extends State<TodayScreen> {
   List<Map<String, dynamic>> _weeklySummary = [];
   List<dynamic> _workouts = [];
   TrainingSplit _split = TrainingSplit.auto;
+
+  /// Null until the user picks a split. Distinct from `auto` on
+  /// purpose: the rest-day credit is only earned against a schedule
+  /// that exists, so a brand-new account must not receive it.
+  TrainingSplit? _savedSplit;
 
   /// True when the last refresh failed but earlier data is still on screen,
   /// so the user is told the numbers are stale rather than being shown a
@@ -74,6 +80,7 @@ class _TodayScreenState extends State<TodayScreen> {
       getWorkouts(),
     ]);
     final split = await SplitService.getSplit();
+    final savedSplit = await SplitService.getSplitIfSet();
     if (!mounted) return;
 
     // Only replace what actually came back. These calls return null/empty on
@@ -95,6 +102,7 @@ class _TodayScreenState extends State<TodayScreen> {
       }
       if (workouts.isNotEmpty || _workouts.isEmpty) _workouts = workouts;
       _split = split;
+      _savedSplit = savedSplit;
       _loading = false;
       _staleSinceFetchFailed = fetchFailed && _dash != null;
     });
@@ -143,12 +151,21 @@ class _TodayScreenState extends State<TodayScreen> {
     final bfChange = _num(_stats['body_fat_change']);
     final volume = _num(_stats['volume']).round();
 
-    final score = ((trained * 0.40 + fueled * 0.35 + proteinP * 0.25) * 100)
-        .round()
-        .clamp(0, 100);
+    // Rest is part of the plan, so a scheduled rest day earns credit rather
+    // than scoring the same zero as a skipped session. Only when a split is
+    // actually saved — `_split` falls back to `auto` for an account that has
+    // never chosen one, and there is no schedule to have rested from there.
+    final restDay = _savedSplit != null && SplitService.isRestDay(_savedSplit!);
+    final score = readinessScore(
+      trained: trained,
+      caloriesProgress: fueled,
+      proteinProgress: proteinP,
+      isScheduledRestDay: restDay,
+    );
 
     return ReadinessData(
       score: score,
+      isRestDay: restDay,
       caloriesProgress: fueled,
       proteinProgress: proteinP,
       sessionsProgress: trained,
@@ -165,7 +182,9 @@ class _TodayScreenState extends State<TodayScreen> {
           ? '${bfChange > 0 ? '+' : ''}${bfChange.toStringAsFixed(1)}%'
           : '',
       trainingDetail: _trainedToday
-          ? 'Trained today ✓'
+          ? 'Trained today'
+          : restDay
+          ? 'Scheduled rest day (+$kRestDayBonus)'
           : 'No workout yet today',
       fuelDetail: kcalTarget > 0
           ? '${_formatThousands(kcal.round())} of '

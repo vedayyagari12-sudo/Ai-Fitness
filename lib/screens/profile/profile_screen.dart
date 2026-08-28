@@ -62,13 +62,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // (_editChoice, _editNumber), and the user can back out of this screen
     // while that sheet is open.
     if (!mounted) return;
+    // Kept so the row can be put back if the write fails.
+    final previous = _profile[key];
+    final wasPresent = _profile.containsKey(key);
     setState(() => _profile[key] = value);
     try {
       await upsertUserProfile({key: value});
     } catch (e) {
       // Don't claim "Saved" when the write failed — a missing column or an
       // RLS rejection would otherwise look identical to success.
-      if (mounted) AppSnackbar.error(context, 'Could not save — $e');
+      //
+      // And put the old value back. The optimistic update above is what made
+      // a failed save so confusing to diagnose: the new choice stayed on
+      // screen for the rest of the session and only reverted on the next
+      // launch, which reads as "it forgot" rather than "it never saved".
+      if (mounted) {
+        setState(() {
+          if (wasPresent) {
+            _profile[key] = previous;
+          } else {
+            _profile.remove(key);
+          }
+        });
+        AppSnackbar.error(context, 'Could not save — $e');
+      }
       return;
     }
     // Weight edited here also feeds the BODY tab's daily log/trend chart —

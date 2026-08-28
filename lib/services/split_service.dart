@@ -48,6 +48,25 @@ class SplitService {
     return TrainingSplit.auto;
   }
 
+  /// The saved split, or null when the user has never chosen one.
+  ///
+  /// [getSplit] answers `auto` for both "chose auto" and "never chose", which
+  /// is right for deciding what to train but wrong for deciding whether a
+  /// rest-day bonus has been earned — that has to be off until a split
+  /// actually exists, and collapsing the two would hand the bonus to every
+  /// brand-new account.
+  static Future<TrainingSplit?> getSplitIfSet() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_key);
+    if (raw != null) {
+      return TrainingSplit.values.firstWhere(
+        (s) => s.name == raw,
+        orElse: () => TrainingSplit.auto,
+      );
+    }
+    return _fetchRemoteSplit();
+  }
+
   static Future<void> setSplit(TrainingSplit split) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, split.name);

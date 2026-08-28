@@ -124,17 +124,22 @@ class ReadinessCard extends StatelessWidget {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: kLime.withValues(alpha: 0.14),
+                                  color: (data.isRestDay ? kCyan : kLime)
+                                      .withValues(alpha: 0.14),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
-                                  'READY',
+                                  // Says why the number is what it is. A
+                                  // rest day adds 40 points, and without a
+                                  // label the score simply jumps for no
+                                  // visible reason.
+                                  data.isRestDay ? 'REST DAY' : 'READY',
                                   textScaler: TextScaler.noScaling,
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 1.8,
-                                    color: kLime,
+                                    color: data.isRestDay ? kCyan : kLime,
                                   ),
                                 ),
                               ),
@@ -148,6 +153,18 @@ class ReadinessCard extends StatelessWidget {
               );
             },
           ),
+          if (data.isRestDay) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Rest day on your split — recovery counts toward today.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: kCyan,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           // The corner stats above/below give the three raw numbers; this
           // gives the one thing they don't — an overall verdict — which is
