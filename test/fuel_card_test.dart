@@ -391,6 +391,69 @@ void main() {
     });
   });
 
+  group('the centre number agrees with the rest of the screen', () {
+    testWidgets('it shows the LOGGED calories, not the macro-derived total', (
+      tester,
+    ) async {
+      // The reported bug. The AI estimates a meal's calories and its macros
+      // separately and nothing reconciles them, so 180/210/62g comes to 2118
+      // by the 4/4/9 rule while the logged figure was 2100. The ring and the
+      // trend chart both show the logged one, so this must too — a screen
+      // showing a day's calories twice, differently, is worse than either.
+      await tester.pumpWidget(
+        host(
+          const FuelCard(
+            proteinG: 180,
+            carbsG: 210,
+            fatG: 62,
+            loggedCalories: 2100,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2100'), findsOneWidget);
+      expect(
+        find.text('2118'),
+        findsNothing,
+        reason: 'the macro-derived total is being shown instead',
+      );
+    });
+
+    testWidgets('it falls back to the macro total when none is logged', (
+      tester,
+    ) async {
+      // A meal can record macros without a calorie figure; showing 0 there
+      // would be wrong in the other direction.
+      await tester.pumpWidget(
+        host(const FuelCard(proteinG: 180, carbsG: 210, fatG: 62)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('2118'), findsOneWidget);
+    });
+
+    testWidgets('the slices stay macro-derived even when calories differ', (
+      tester,
+    ) async {
+      // Only the headline is unified. Proportion is what the slices are for,
+      // and that has to come from the macros.
+      await tester.pumpWidget(
+        host(
+          const FuelCard(
+            proteinG: 100,
+            carbsG: 100,
+            fatG: 100,
+            loggedCalories: 999,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final v = dataOf(tester).sections.map((s) => s.value).toList();
+      expect(v[0], closeTo(400, 0.01));
+      expect(v[2], closeTo(900, 0.01));
+    });
+  });
+
   group('layout', () {
     for (final scale in [1.0, 1.3]) {
       testWidgets('fits a 320dp phone at ${scale}x text', (tester) async {

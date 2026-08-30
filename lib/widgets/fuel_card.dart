@@ -19,11 +19,16 @@ class FuelCard extends StatelessWidget {
     required this.carbsG,
     required this.fatG,
     this.goal = 'maintain',
+    this.loggedCalories,
   });
 
   final double proteinG;
   final double carbsG;
   final double fatG;
+
+  /// Today's calories as logged. Shown in the ring's centre so this card
+  /// agrees with the readiness ring and the calorie chart — see MacroDonut.
+  final double? loggedCalories;
 
   /// Drives the takeaway line — protein matters more on a cut.
   final String goal;
@@ -77,7 +82,11 @@ class FuelCard extends StatelessWidget {
                   _minDiameter,
                   _maxDiameter,
                 );
-                return MacroDonut(split: split, size: diameter);
+                return MacroDonut(
+                  split: split,
+                  size: diameter,
+                  loggedCalories: loggedCalories,
+                );
               },
             ),
           ),

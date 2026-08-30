@@ -20,11 +20,33 @@ class MacroDonut extends StatelessWidget {
     required this.split,
     this.size = 132,
     this.centreLabel = 'KCAL',
+    this.loggedCalories,
   });
 
   final MacroSplit split;
   final double size;
   final String centreLabel;
+
+  /// The day's calories as logged, which is the figure the readiness ring and
+  /// the trend chart both show.
+  ///
+  /// The centre used to display the macro-derived total instead — protein and
+  /// carbs at 4 kcal/g plus fat at 9 — and those two numbers do not agree,
+  /// because the AI estimates a meal's calories and its macros separately and
+  /// nothing reconciles them. The result was one screen showing 380 and 384
+  /// for the same day. The slices stay macro-derived, since proportion is
+  /// what they are for; only the headline number is unified.
+  ///
+  /// Null falls back to the macro total, which is right when a meal recorded
+  /// macros but no calorie figure.
+  final double? loggedCalories;
+
+  /// What the centre actually prints.
+  double get _centreKcal {
+    final logged = loggedCalories;
+    if (logged != null && logged.isFinite && logged > 0) return logged;
+    return split.totalKcal;
+  }
 
   /// The colour each macro carries here and in the legend beside it.
   ///
@@ -160,7 +182,7 @@ class MacroDonut extends StatelessWidget {
                         Text(
                           split.isEmpty
                               ? '—'
-                              : (split.totalKcal * t).round().toString(),
+                              : (_centreKcal * t).round().toString(),
                           textScaler: TextScaler.noScaling,
                           style: TextStyle(
                             // Scales with the ring, like the readiness

@@ -162,6 +162,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String key, {
     bool decimal = false,
     String? suffix,
+    // Inclusive bounds in the units SHOWN, not the units stored — the sheet
+    // validates what the user typed, so a converted field (weight in lbs on
+    // screen, kg in the row) must give its range in display units too.
+    num? min,
+    num? max,
     // Optional unit conversion between what's stored and what's shown
     // (e.g. weight is stored in kg but entered/displayed in lbs).
     double Function(double stored)? storeToDisplay,
@@ -181,32 +186,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          24,
-          24,
-          24 + MediaQuery.of(ctx).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(title.toUpperCase(), style: kLabelSmall),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: TextInputType.numberWithOptions(decimal: decimal),
-              decoration: InputDecoration(suffixText: suffix),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          // Recomputed as the user types, so an out-of-range value is
+          // refused at the point of entry rather than silently dropped on
+          // save — which is what the old version did.
+          final entered = double.tryParse(ctrl.text.trim());
+          final String? error;
+          if (ctrl.text.trim().isEmpty) {
+            error = null;
+          } else if (entered == null || !entered.isFinite) {
+            error = 'Numbers only';
+          } else if (min != null && entered < min) {
+            error = 'Must be at least $min';
+          } else if (max != null && entered > max) {
+            error = 'Must be $max or less';
+          } else {
+            error = null;
+          }
+          final canSave = ctrl.text.trim().isNotEmpty && error == null;
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              24,
+              24,
+              24,
+              24 + MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Save'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(title.toUpperCase(), style: kLabelSmall),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  keyboardType: TextInputType.numberWithOptions(
+                    decimal: decimal,
+                  ),
+                  onChanged: (_) => setSheetState(() {}),
+                  decoration: InputDecoration(
+                    suffixText: suffix,
+                    errorText: error,
+                    helperText: min != null && max != null && error == null
+                        ? 'Between $min and $max'
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: canSave ? () => Navigator.pop(ctx, true) : null,
+                  child: const Text('Save'),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
     if (saved == true) {
@@ -439,7 +475,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _detailRow(
                     'Age',
                     _display('age'),
-                    () => _editNumber('Age', 'age'),
+                    // 13 is the floor most app stores treat as the minimum
+                    // age for an account; 80 is the practical ceiling for the
+                    // activity formulas this drives.
+                    () => _editNumber('Age', 'age', min: 13, max: 80),
                   ),
                   _detailRow(
                     'Height',

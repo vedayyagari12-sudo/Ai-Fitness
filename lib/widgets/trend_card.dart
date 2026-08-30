@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import '../utils/calorie_bounds.dart';
 import '../utils/chart_labels.dart';
 import '../utils/chart_range.dart';
 import '../utils/units.dart';
@@ -342,7 +343,9 @@ class _TrendCardState extends State<TrendCard> {
               const SizedBox(width: 10),
               _legendDot(ChartFill.gold, 'Close'),
               const SizedBox(width: 10),
-              _legendDot(ChartFill.pink, 'Off target'),
+              // "Under", not "Off target": going over now counts as
+              // hitting the goal, so pink can only mean short.
+              _legendDot(ChartFill.pink, 'Under'),
               const SizedBox(width: 10),
               _legendDot(kChartEmpty, 'Not logged'),
             ],
@@ -353,14 +356,14 @@ class _TrendCardState extends State<TrendCard> {
   }
 
   Color _dayColor(double cal) {
-    final target = widget.calorieTarget;
     // kChartEmpty, not kBgHighlight: that measured 1.23:1 on the card, so an
     // unlogged day was indistinguishable from no bar at all.
-    if (cal <= 0 || target <= 0) return kChartEmpty;
-    final off = (cal - target).abs() / target;
-    if (off <= 0.10) return ChartFill.green;
-    if (off <= 0.20) return ChartFill.gold;
-    return ChartFill.pink;
+    return switch (calorieStatus(cal, widget.calorieTarget)) {
+      CalorieStatus.onTarget => ChartFill.green,
+      CalorieStatus.close => ChartFill.gold,
+      CalorieStatus.offTarget => ChartFill.pink,
+      CalorieStatus.notLogged => kChartEmpty,
+    };
   }
 
   BarChartData _calorieBars(double width) {

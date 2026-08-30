@@ -11,6 +11,7 @@ import '../services/today_cache.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import '../theme/theme_controller.dart';
+import '../utils/calorie_bounds.dart';
 import '../utils/readiness_score.dart';
 import '../utils/strength_trend.dart';
 import '../utils/units.dart';
@@ -137,7 +138,9 @@ class _TodayScreenState extends State<TodayScreen> {
     // train once (40%) + hit your calories (35%) + hit your protein (25%).
     final trained = _trainedToday ? 1.0 : 0.0;
 
-    final kcal = _num(_stats['calories']);
+    // Clamped: one misread meal photo can return five figures, which
+    // would rescale the whole week's chart and inflate the ring.
+    final kcal = clampDailyCalories(_num(_stats['calories']));
     final kcalTarget = _num(_stats['calorie_target']);
     final fueled = kcalTarget > 0 ? (kcal / kcalTarget).clamp(0.0, 1.0) : 0.0;
 
@@ -239,7 +242,10 @@ class _TodayScreenState extends State<TodayScreen> {
   /// backend value keeps the ring and the chart's target line in agreement.
   double get _calorieTarget {
     final backend = _num(_stats['calorie_target']);
-    return backend > 0 ? backend : 2200;
+    // Capped at the same ceiling as intake. A target above what a day can
+    // report would be unreachable by construction, so every bar would read
+    // as short no matter what the user ate.
+    return clampDailyCalories(backend > 0 ? backend : 2200);
   }
 
   /// Weekly training volume in lbs lifted, oldest → newest (up to 8 weeks).
@@ -356,7 +362,9 @@ class _TodayScreenState extends State<TodayScreen> {
       TrendCard(
         goal: _goal,
         weightLbs: [for (final kg in _trendValues('weight')) kgToLbs(kg)],
-        dailyCalories: _rawTrendValues('calories'),
+        dailyCalories: [
+          for (final v in _rawTrendValues('calories')) clampDailyCalories(v),
+        ],
         dayLabels: _dayLabels,
         calorieTarget: _calorieTarget,
         weeklyVolume: _weeklyVolume,
@@ -372,6 +380,9 @@ class _TodayScreenState extends State<TodayScreen> {
         carbsG: _num(_stats['carbs']),
         fatG: _num(_stats['fat']),
         goal: _goal,
+        // The same figure the ring and the chart use, so one day cannot
+        // show two different calorie totals on one screen.
+        loggedCalories: clampDailyCalories(_num(_stats['calories'])),
       ),
       const SizedBox(height: 12),
       // IntrinsicHeight + stretch: the two cards hold different amounts of

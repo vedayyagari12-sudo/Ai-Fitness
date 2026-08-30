@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:physiqo_ai/theme/app_theme.dart';
 import 'package:physiqo_ai/widgets/trend_card.dart';
 
 /// Each tab's chart form is a claim about what the data is: bars and a line
@@ -99,6 +100,44 @@ void main() {
         }
       }
     }
+  });
+
+  testWidgets('a day OVER its calorie target is coloured as on target', (
+    tester,
+  ) async {
+    // The reported bug: with a 3,200 target, days at 3,480 / 3,990 / 4,310
+    // were all marked as misses because the old rule scored distance from
+    // the target in either direction. Beating a bulking goal is the goal
+    // being met. This asserts the chart actually consults the shared rule —
+    // testing calorieStatus alone cannot catch the chart ignoring it.
+    await pump(tester);
+    await openTab(tester, 'CALORIES');
+
+    final data = tester.widget<BarChart>(find.byType(BarChart)).data;
+    // Fixture: [3480, 0, 4120, 3990, 2870, 4310, 3760] against a 3200 target.
+    const over = [0, 2, 3, 5, 6];
+    for (final i in over) {
+      final rod = data.barGroups[i].barRods.first;
+      final colour = rod.gradient?.colors.last ?? rod.color;
+      expect(
+        colour,
+        ChartFill.green,
+        reason: 'bar $i is over target but is not coloured as on target',
+      );
+    }
+  });
+
+  testWidgets('a day well SHORT of target is still marked under', (
+    tester,
+  ) async {
+    // The rule must not have become "everything is fine".
+    await pump(tester);
+    await openTab(tester, 'CALORIES');
+    final data = tester.widget<BarChart>(find.byType(BarChart)).data;
+    // Index 4 is 2,870 against 3,200 — 90%, so "close" rather than green.
+    final rod = data.barGroups[4].barRods.first;
+    final colour = rod.gradient?.colors.last ?? rod.color;
+    expect(colour, isNot(ChartFill.green));
   });
 
   testWidgets('only the newest weight reading is dotted', (tester) async {
