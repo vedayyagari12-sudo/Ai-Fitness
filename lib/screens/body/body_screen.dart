@@ -168,6 +168,32 @@ class _BodyScreenState extends State<BodyScreen> {
   String _titleCase(String s) =>
       s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 
+  /// Full date for the expanded scan detail — "26 August 2026".
+  ///
+  /// Spelled out rather than the row's abbreviated form: this has a line to
+  /// itself, so there is no reason to compress it, and a scan history is
+  /// read to answer "when was this" precisely.
+  String _fullDateLabel(String? iso) {
+    final d = DateTime.tryParse(iso ?? '');
+    if (d == null) return '';
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final local = d.toLocal();
+    return '${local.day} ${months[local.month - 1]} ${local.year}';
+  }
+
   String _dateLabel(String? iso) {
     final d = DateTime.tryParse(iso ?? '');
     if (d == null) return '';
@@ -1535,36 +1561,21 @@ class _BodyScreenState extends State<BodyScreen> {
             children: [
               Row(
                 children: [
-                  // The label + date pair shares the row with two 18px stat
-                  // numbers; unflexed, a long date pushed those off the edge.
+                  // Just the label here. The date used to share this row
+                  // with two 18px stat numbers and lost every time both were
+                  // present — "AUG 26" was rendered as "A…", which tells the
+                  // reader nothing at all. It moved into the expanded detail
+                  // below, where it has a line to itself.
                   Flexible(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Scan #$number',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(
-                            _dateLabel(scan['created_at'] as String?),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 14,
-                              letterSpacing: 0.6,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'Scan #$number',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -1623,11 +1634,34 @@ class _BodyScreenState extends State<BodyScreen> {
         ? kGold
         : kPink;
 
+    final date = _fullDateLabel(scan['created_at'] as String?);
+
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (date.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 13,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  date,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           for (final (name, v) in scores)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),

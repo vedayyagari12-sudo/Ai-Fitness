@@ -442,11 +442,25 @@ Future<void> upsertUserProfile(Map<String, dynamic> profile) async {
   });
 }
 
+/// Seeds the profile from the answers given during onboarding.
+///
+/// SEEDS — it fills blanks and never overwrites a value that is already
+/// there. That distinction is the whole point of this function.
+///
+/// This runs on every app launch (MainScreen.initState), as a recovery path
+/// for someone who onboarded offline and whose first sync never landed. It
+/// used to upsert all eight fields unconditionally, which meant every launch
+/// quietly restored the original onboarding answers over anything the user
+/// had since changed in Settings. Editing equipment, fitness level or weekly
+/// sessions therefore appeared to work, saved correctly, and was gone again
+/// the next time the app opened — with no error anywhere, because nothing
+/// had actually failed.
 Future<void> syncOnboardingToProfile(dynamic data) async {
   final userId = getCurrentUserId();
   if (userId == null) return;
-  await Supabase.instance.client.from('user_profiles').upsert({
-    'id': userId,
+
+  // What onboarding knows.
+  final seed = <String, dynamic>{
     'goal': mapOnboardingGoalToProfile(data.goal as String?),
     'gender': data.gender,
     'age': data.age,
@@ -455,6 +469,27 @@ Future<void> syncOnboardingToProfile(dynamic data) async {
     'workout_frequency': data.workoutFrequency,
     'equipment': data.equipment,
     'fitness_level': data.fitnessLevel,
+  };
+
+  // What the account already says. A read failure returns null, which is
+  // deliberately treated as "unknown" rather than "empty": seeding over a
+  // profile we could not read would be exactly the bug this replaced.
+  final existing = await getUserProfile();
+  if (existing == null) return;
+
+  final missing = <String, dynamic>{
+    for (final entry in seed.entries)
+      if (entry.value != null && existing[entry.key] == null)
+        entry.key: entry.value,
+  };
+  if (missing.isEmpty) {
+    // Everything onboarding could contribute is already on the account.
+    return;
+  }
+
+  await Supabase.instance.client.from('user_profiles').upsert({
+    'id': userId,
+    ...missing,
     'updated_at': DateTime.now().toIso8601String(),
   });
 
