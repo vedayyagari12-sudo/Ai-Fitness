@@ -1,4 +1,4 @@
-package com.fitai.app
+package com.vaappstudio.physiqoai
 
 import io.flutter.embedding.android.FlutterActivity
 

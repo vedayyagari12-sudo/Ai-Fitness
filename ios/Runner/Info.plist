@@ -30,7 +30,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.fitai.app</string>
+			<string>com.vaappstudio.physiqoai</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>physiqoai</string>

@@ -19,7 +19,7 @@ val keystoreProperties = Properties().apply {
 val isUploadSigned = keystoreProperties.getProperty("storeFile") != null
 
 android {
-    namespace = "com.fitai.app"
+    namespace = "com.vaappstudio.physiqoai"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -33,7 +33,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.fitai.app"
+        applicationId = "com.vaappstudio.physiqoai"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode
