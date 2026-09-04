@@ -52,6 +52,17 @@ class MuscleRadar extends StatelessWidget {
                 grid: kChartGrid,
                 labelColour: kTextSecondary,
                 surface: kBgCard,
+                // Resolved here, not in paint(). kLabelSmall is a
+                // GoogleFonts.inter call, and google_fonts THROWS when its
+                // fetch fails — reached from paint() that exception escapes
+                // through the render pipeline and takes down every widget
+                // test that draws this radar. Build time is where every
+                // other style in this app is resolved anyway.
+                labelStyle: kLabelSmall.copyWith(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
               ),
               // The web carries no text of its own, so the shape needs a
               // spoken description for anyone not seeing it.
@@ -81,6 +92,7 @@ class MuscleRadarPainter extends CustomPainter {
     required this.grid,
     required this.labelColour,
     required this.surface,
+    required this.labelStyle,
     this.maxScore = 10,
   });
 
@@ -90,6 +102,9 @@ class MuscleRadarPainter extends CustomPainter {
   final Color grid;
   final Color labelColour;
   final Color surface;
+
+  /// Axis label typography, resolved by the caller — see the note there.
+  final TextStyle labelStyle;
   final double maxScore;
 
   /// Room outside the web for the axis labels.
@@ -167,12 +182,11 @@ class MuscleRadarPainter extends CustomPainter {
       final painter = TextPainter(
         text: TextSpan(
           text: readings[i].label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: labelColour,
-          ),
+          // A TextPainter inside a CustomPainter inherits nothing from the
+          // widget tree, so without an explicit family these labels fell
+          // through to the platform default while every other label on the
+          // screen used the app's own face.
+          style: labelStyle.copyWith(color: labelColour),
         ),
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
@@ -202,5 +216,6 @@ class MuscleRadarPainter extends CustomPainter {
       old.grid != grid ||
       old.labelColour != labelColour ||
       old.surface != surface ||
+      old.labelStyle != labelStyle ||
       old.maxScore != maxScore;
 }

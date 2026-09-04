@@ -40,6 +40,9 @@ void main() {
         grid: const Color(0x22FFFFFF),
         labelColour: const Color(0xFF8A8A8A),
         surface: const Color(0xFF141414),
+        // A literal style, not the app's kLabelSmall: that resolves through
+        // google_fonts, which reaches the network and throws in a test.
+        labelStyle: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
       );
 
   _RecordingCanvas record(List<MuscleReading> readings) {
