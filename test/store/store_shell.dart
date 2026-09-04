@@ -141,16 +141,22 @@ class ShotGreetingHeader extends StatelessWidget {
     required this.greeting,
     required this.avatarInitial,
     this.streak,
+    this.dense = false,
   });
+
+  /// Tighter vertical padding, for a shot that needs the pixels back.
 
   final String dateLabel;
   final String greeting;
   final String avatarInitial;
   final Widget? streak;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    padding: dense
+        ? const EdgeInsets.fromLTRB(16, 2, 16, 6)
+        : const EdgeInsets.fromLTRB(16, 8, 16, 12),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
