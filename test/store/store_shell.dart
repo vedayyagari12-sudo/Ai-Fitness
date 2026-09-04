@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:physiqo_ai/theme/app_theme.dart';
+import 'package:physiqo_ai/theme/app_widgets.dart';
+import 'package:physiqo_ai/theme/theme_controller.dart';
 
 /// Phone frame for the Play Store screenshots.
 ///
@@ -13,14 +15,26 @@ const double kShotDpr = 3.0;
 /// 1024x500 exactly, rendered at DPR 1.
 const Size kFeatureLogical = Size(1024, 500);
 
-/// Wraps screen content in the app's own dark theme and a Scaffold, so the
-/// surfaces, text colours and dividers are the shipped ones rather than
-/// anything restated here.
-Widget storeApp(Widget child) => MaterialApp(
-  debugShowCheckedModeBanner: false,
-  theme: AppTheme.darkTheme,
-  home: Scaffold(backgroundColor: kBgDeep, body: child),
-);
+/// Wraps screen content the way the app itself does: its own theme, and the
+/// real [AmbientBackground] the four tab screens all sit inside.
+///
+/// The background matters more than it sounds. Every tab wraps its body in
+/// AmbientBackground, which paints kPageGradient — a vertical fade from a
+/// blue-tinted #1E2736 at the top down through #10131A to #0A0A0A. Rendering
+/// onto a flat kBgDeep instead, as an earlier pass did, produced a dead black
+/// page that read as a different app from the one on the phone.
+Widget storeApp(Widget child, {bool light = false}) {
+  AppColors.brightness = light ? Brightness.light : Brightness.dark;
+  ThemeController.mode.value = light ? ThemeMode.light : ThemeMode.dark;
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: light ? AppTheme.lightTheme : AppTheme.darkTheme,
+    home: Scaffold(
+      backgroundColor: kBgDeep,
+      body: AmbientBackground(child: child),
+    ),
+  );
+}
 
 /// The app's bottom navigation, rebuilt to match what ships: four tabs, the
 /// active one carrying its tab accent plus the short bar above it.
@@ -112,6 +126,68 @@ class ShotHeader extends StatelessWidget {
         ),
         const Spacer(),
         ?trailing,
+      ],
+    ),
+  );
+}
+
+/// The TODAY tab's real header: date label over a greeting on the left, the
+/// streak chip and profile avatar on the right. Mirrors the block in
+/// today_screen.dart rather than inventing a title bar.
+class ShotGreetingHeader extends StatelessWidget {
+  const ShotGreetingHeader({
+    super.key,
+    required this.dateLabel,
+    required this.greeting,
+    required this.avatarInitial,
+    this.streak,
+  });
+
+  final String dateLabel;
+  final String greeting;
+  final String avatarInitial;
+  final Widget? streak;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(dateLabel, style: kLabelSmall.copyWith(fontSize: 11)),
+              const SizedBox(height: 2),
+              Text(greeting, style: kHeadlineMedium.copyWith(fontSize: 26)),
+            ],
+          ),
+        ),
+        Row(
+          children: [
+            ?streak,
+            if (streak != null) const SizedBox(width: 8),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: kBgCard,
+                shape: BoxShape.circle,
+                border: Border.all(color: kBorder),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                avatarInitial,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: kTextPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     ),
   );

@@ -28,7 +28,12 @@ void main() {
     ThemeController.mode.value = ThemeMode.dark;
   });
 
-  Future<void> shoot(WidgetTester tester, String name, Widget child) async {
+  Future<void> shoot(
+    WidgetTester tester,
+    String name,
+    Widget child, {
+    bool light = false,
+  }) async {
     tester.view.physicalSize = Size(
       kShotLogical.width * kShotDpr,
       kShotLogical.height * kShotDpr,
@@ -36,7 +41,7 @@ void main() {
     tester.view.devicePixelRatio = kShotDpr;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(storeApp(child));
+    await tester.pumpWidget(storeApp(child, light: light));
     // Let the ring and donut entrance animations finish before capturing.
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await expectLater(
@@ -45,7 +50,28 @@ void main() {
     );
   }
 
-  /// Page body shared by every shot: header, content, bottom nav.
+  /// Page body taking a ready-made header widget — used by the TODAY shots,
+  /// which carry the app's real greeting block rather than a plain title.
+  Widget pageWithHeader({
+    required Widget header,
+    required List<Widget> children,
+    required int tab,
+  }) => Column(
+    children: [
+      const SizedBox(height: 14),
+      header,
+      Expanded(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Column(children: children),
+        ),
+      ),
+      ShotNavBar(activeIndex: tab),
+    ],
+  );
+
+  /// Page body shared by the remaining shots: title, content, bottom nav.
   Widget page({
     required String title,
     Widget? trailing,
@@ -88,9 +114,13 @@ void main() {
     await shoot(
       tester,
       '03_screenshot_dashboard',
-      page(
-        title: 'Today',
-        trailing: const StreakChip(count: 12, isKeptToday: true),
+      pageWithHeader(
+        header: const ShotGreetingHeader(
+          dateLabel: 'THU · SEP 3',
+          greeting: 'Good evening',
+          avatarInitial: 'V',
+          streak: StreakChip(count: 12, isKeptToday: true),
+        ),
         tab: 0,
         children: const [
           // WeekStrip is deliberately absent. The readiness card runs the
@@ -107,8 +137,14 @@ void main() {
     await shoot(
       tester,
       '04_screenshot_trends',
-      page(
-        title: 'Progress',
+      light: true,
+      pageWithHeader(
+        header: const ShotGreetingHeader(
+          dateLabel: 'THU · SEP 3',
+          greeting: 'Good evening',
+          avatarInitial: 'V',
+          streak: StreakChip(count: 12, isKeptToday: true),
+        ),
         tab: 0,
         children: const [
           TrendCard(
@@ -121,9 +157,9 @@ void main() {
             weeklyStrength: [295, 305, 310, 325],
             strengthExercise: 'Deadlift',
           ),
-          // No FuelCard here: at 640dp the chart already fills the frame and
-          // the donut was landing half-cut behind the nav bar. The macro ring
-          // gets a clean showing on the food-scan shot instead.
+          // Nothing below the chart. The FuelCard needs ~300dp and the
+          // WeekStrip ~113dp against the ~85dp the chart leaves, so both
+          // landed sliced. A focused single-card shot beats a cropped one.
         ],
       ),
     );

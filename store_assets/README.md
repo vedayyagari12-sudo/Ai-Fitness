@@ -2,23 +2,62 @@
 
 Upload these in Play Console under **Grow → Store presence → Main store listing**.
 
-| File | Where it goes | Size |
+| File | Where it goes | Source |
 |---|---|---|
-| `01_app_icon_512.png` | App icon | 512 × 512 |
-| `02_feature_graphic_1024x500.png` | Feature graphic | 1024 × 500 |
-| `03_screenshot_dashboard.png` | Phone screenshots | 1080 × 1920 |
-| `04_screenshot_trends.png` | Phone screenshots | 1080 × 1920 |
-| `05_screenshot_physique_scan.png` | Phone screenshots | 1080 × 1920 |
-| `06_screenshot_food_scan.png` | Phone screenshots | 1080 × 1920 |
-| `07_screenshot_workout.png` | Phone screenshots | 1080 × 1920 |
+| `01_app_icon_512.png` | App icon (512 x 512) | Composited from the real launcher icon |
+| `02_feature_graphic_1024x500.png` | Feature graphic (1024 x 500) | Real icon + real Outfit face + kBrand |
+| `03_screenshot_dashboard.png` | Phone screenshot | Rendered from the app's widgets (dark) |
+| `04_screenshot_trends.png` | Phone screenshot | Rendered from the app's widgets (**light**) |
+| `05_screenshot_food_scan.png` | Phone screenshot | **Real device capture** |
+| `06_screenshot_physique_scan.png` | Phone screenshot | **Real device capture** |
+| `07_screenshot_body.png` | Phone screenshot | **Real device capture** |
+| `08_screenshot_workout.png` | Phone screenshot | **Real device capture** |
+| `optional_scan_history_light.png` | *not in the set* | Real, sharp, but shows a fixed bug |
 
-Play needs at least 2 phone screenshots; 5 are here. All are 9:16, inside the
-16:9–9:16 ratio band and the 320–3840 px per-side limits.
+All screenshots are 1080 x 1920 (9:16). Play needs at least 2; six are here,
+under the limit of 8.
+
+## Dark and light
+
+Four screenshots are the app's dark theme, one (`04`) is light. Real captures
+keep whatever theme they were taken in.
+
+The dark background is NOT flat black. Every tab wraps its body in
+`AmbientBackground`, which paints `kPageGradient` — a vertical fade from a
+blue-tinted `#1E2736` at the top through `#10131A` to `#0A0A0A`. An earlier
+pass rendered onto flat `kBgDeep` and the result read as a different app. The
+renderer now uses the real `AmbientBackground` widget, so this comes for free.
+
+## The real captures
+
+`05`-`08` are genuine screenshots of the running app with real logged data.
+`tool/process_real_screenshots.py` prepares them:
+
+- **Crops off the red Flutter DEBUG ribbon.** Measured per image, not assumed:
+  9-12px on most, ~40px where the phone status bar is also present. Detection
+  is confined to the far corner and to strongly saturated red — a wider test
+  matched the warm tones in the food photo and would have cropped the header
+  away. An earlier version *painted over* the corner instead and destroyed the
+  BODY screen's "AUG 31" date chip; cropping cannot erase a control.
+- **Trims the black window-border strips** the mirror capture leaves (up to
+  15px). Left in, the padding step copies that black column outward and the
+  shot gets a hard black band down one side.
+- **Scales to fit and pads by edge replication.** Never an invented colour: the
+  page gradient is horizontally uniform, so extending a row sideways is
+  seamless.
+
+**Known limitation:** `05`-`08` were captured from a phone-mirror window at
+~390px wide, so upscaling to 1080 leaves them visibly softer than the rendered
+shots. Upscaling cannot add detail back. Re-capturing these four natively on
+the phone (Power + Volume Down gives 1080 x 2340) and re-running the script
+would fix it — the script handles native captures already, as
+`optional_scan_history_light.png` shows.
 
 ## How they were made, and what that means for accuracy
 
-**The screenshots are rendered by the real Flutter engine from the app's own
-widgets.** `ReadinessCard`, `TrendCard`, `FuelCard`/`MacroDonut`, `MuscleRadar`,
+### The two rendered shots (`03`, `04`)
+
+**Rendered by the real Flutter engine from the app's own widgets.** `ReadinessCard`, `TrendCard`, `FuelCard`/`MacroDonut`, `MuscleRadar`,
 `WeekStrip` and `StreakChip` are the exact classes that run on a device, drawn
 in the real dark theme, given sample data instead of a live account. They are
 not redrawn mockups, so the rings, charts, colours, spacing and type are the
